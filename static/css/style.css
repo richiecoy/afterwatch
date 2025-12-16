@@ -513,3 +513,10 @@ h2 {
     width: 60px;
     text-align: center;
 }
+
+/* Export actions */
+.export-actions {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--bg-card);
+}
