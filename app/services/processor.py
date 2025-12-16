@@ -85,7 +85,11 @@ async def get_folder_mappings(
 
 def get_subfolder_id_for_path(file_path: str, folder_mappings: dict[int, str]) -> Optional[int]:
     """Find which subfolder a file belongs to based on its path."""
-    for subfolder_id, folder_path in folder_mappings.items():
+    # Sort by path length descending so longer (more specific) paths match first
+    # This prevents /RnDTV matching before /RnDTV-Archive
+    sorted_mappings = sorted(folder_mappings.items(), key=lambda x: len(x[1]), reverse=True)
+    
+    for subfolder_id, folder_path in sorted_mappings:
         if file_path.startswith(folder_path):
             return subfolder_id
     return None
