@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     
     # Database
     data_dir: Path = Field(default=Path("/app/data"))
-    database_url: str = Field(default="sqlite+aiosqlite:///app/data/afterwatch.db")
+    database_url: str = Field(default="sqlite+aiosqlite:////app/data/afterwatch.db")
     
     # Server
     host: str = Field(default="0.0.0.0")
