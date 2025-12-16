@@ -22,6 +22,10 @@ class ProcessLog(Base):
     original_path: Mapped[str] = mapped_column(String(1000))
     original_size_bytes: Mapped[int] = mapped_column(Integer)
     strm_path: Mapped[str] = mapped_column(String(1000))
+    folder_name: Mapped[str] = mapped_column(String(200), nullable=True)
+    
+    # Watch info
+    watched_by: Mapped[str] = mapped_column(String(500), nullable=True)  # Comma-separated user names
     
     # Status
     success: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -45,12 +49,12 @@ class ProcessRun(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     
-    trigger: Mapped[str] = mapped_column(String(50))  # 'scheduled', 'manual'
+    trigger: Mapped[str] = mapped_column(String(50))
     dry_run: Mapped[bool] = mapped_column(Boolean, default=False)
     
     episodes_processed: Mapped[int] = mapped_column(Integer, default=0)
     episodes_failed: Mapped[int] = mapped_column(Integer, default=0)
     bytes_reclaimed: Mapped[int] = mapped_column(Integer, default=0)
     
-    status: Mapped[str] = mapped_column(String(50), default="running")  # running, completed, failed
+    status: Mapped[str] = mapped_column(String(50), default="running")
     error_message: Mapped[str] = mapped_column(Text, nullable=True)
