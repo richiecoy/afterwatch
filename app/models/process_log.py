@@ -10,7 +10,7 @@ class ProcessLog(Base):
     __tablename__ = "process_logs"
     
     id: Mapped[int] = mapped_column(primary_key=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     
     # Episode info
     series_name: Mapped[str] = mapped_column(String(500))
@@ -25,7 +25,7 @@ class ProcessLog(Base):
     folder_name: Mapped[str] = mapped_column(String(200), nullable=True)
     
     # Watch info
-    watched_by: Mapped[str] = mapped_column(String(500), nullable=True)  # Comma-separated user names
+    watched_by: Mapped[str] = mapped_column(String(500), nullable=True)
     
     # Status
     success: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -46,7 +46,7 @@ class ProcessRun(Base):
     __tablename__ = "process_runs"
     
     id: Mapped[int] = mapped_column(primary_key=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     
     trigger: Mapped[str] = mapped_column(String(50))
