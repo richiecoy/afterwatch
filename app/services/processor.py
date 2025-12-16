@@ -158,6 +158,11 @@ async def process_episode(
     if file_path.lower().endswith(".strm"):
         return None
     
+    # Skip if original file is gone but STRM exists (already processed)
+    strm_version = str(Path(file_path).with_suffix(".strm"))
+    if not os.path.exists(file_path) and os.path.exists(strm_version):
+        return None
+    
     # Get folder name from path
     folder_name = None
     subfolder_id = get_subfolder_id_for_path(file_path, folder_mappings)
