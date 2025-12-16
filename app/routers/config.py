@@ -136,8 +136,6 @@ async def sync_emby_data(
     session: AsyncSession = Depends(get_session)
 ):
     """Sync users and libraries from Emby."""
-    from app.models import EmbyLibraryFolder
-    
     result = await session.execute(
         select(Connection).where(Connection.service == "emby")
     )
@@ -158,7 +156,8 @@ async def sync_emby_data(
             session.add(EmbyUser(
                 id=user["Id"],
                 name=user["Name"],
-                is_active=True
+                is_active=True,
+                is_excluded=False
             ))
     
     # Sync libraries and their folders
@@ -184,12 +183,10 @@ async def sync_emby_data(
             ))
         
         # Sync folder mappings
-        # Pattern: subfolder_id = library_id + 2 + index
         lib_id_int = int(lib_id)
         for i, folder_path in enumerate(locations):
             subfolder_id = lib_id_int + 2 + i
             
-            # Check if mapping exists
             result = await session.execute(
                 select(EmbyLibraryFolder).where(
                     EmbyLibraryFolder.library_id == lib_id,
@@ -209,6 +206,7 @@ async def sync_emby_data(
     
     await session.commit()
     return RedirectResponse(url="/config", status_code=303)
+
 
 @router.post("/library/{library_id}/toggle")
 async def toggle_library(
@@ -254,6 +252,19 @@ async def update_library_users(
     return {"success": True}
 
 
+@router.post("/user/{user_id}/toggle-excluded")
+async def toggle_user_excluded(
+    user_id: str,
+    session: AsyncSession = Depends(get_session)
+):
+    """Toggle a user's excluded status."""
+    user = await session.get(EmbyUser, user_id)
+    if user:
+        user.is_excluded = not user.is_excluded
+        await session.commit()
+    return {"excluded": user.is_excluded if user else False}
+
+
 @router.post("/settings")
 async def update_settings(
     dry_run: bool = Form(False),
@@ -262,12 +273,10 @@ async def update_settings(
     session: AsyncSession = Depends(get_session)
 ):
     """Update application settings."""
-    # Update in-memory settings
     settings.dry_run = dry_run
     settings.schedule_hour = schedule_hour
     settings.schedule_minute = schedule_minute
     
-    # Update scheduler
     from app.scheduler import update_schedule
     update_schedule(schedule_hour, schedule_minute)
     
