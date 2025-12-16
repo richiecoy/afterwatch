@@ -257,8 +257,8 @@ async def process_watched_episodes(trigger: str = "manual"):
                 accessible_users = []
                 for user_id in required_users:
                     user_libs = user_access.get(user_id)
-                    # None means all access, or check if library is in their list
-                    if user_libs is None or library.id in user_libs:
+                    # None means all access, or check if library GUID is in their list
+                    if user_libs is None or (library.guid and library.guid in user_libs):
                         accessible_users.append(user_id)
                 
                 if not accessible_users:
