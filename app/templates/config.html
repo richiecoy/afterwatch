@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Afterwatch{% endblock %}
+
+{% block content %}
+<h1>Configuration</h1>
+
+<div class="config-sections">
+    <!-- Emby Connection -->
+    <section class="config-section">
+        <h2>Emby Connection</h2>
+        <form method="POST" action="/config/emby" class="config-form">
+            <div class="form-group">
+                <label for="emby-url">Emby URL</label>
+                <input 
+                    type="url" 
+                    id="emby-url" 
+                    name="url" 
+                    value="{{ emby.url if emby else '' }}"
+                    placeholder="http://localhost:8096"
+                    required
+                >
+            </div>
+            <div class="form-group">
+                <label for="emby-api-key">API Key</label>
+                <input 
+                    type="password" 
+                    id="emby-api-key" 
+                    name="api_key" 
+                    value="{{ emby.api_key if emby else '' }}"
+                    placeholder="Your Emby API key"
+                    required
+                >
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save & Test</button>
+                {% if emby and emby.verified %}
+                <span class="status-badge success">✓ Connected</span>
+                {% elif emby %}
+                <span class="status-badge error">✗ Not Connected</span>
+                {% endif %}
+            </div>
+        </form>
+    </section>
+
+    <!-- Sonarr Connection -->
+    <section class="config-section">
+        <h2>Sonarr Connection</h2>
+        <form method="POST" action="/config/sonarr" class="config-form">
+            <div class="form-group">
+                <label for="sonarr-url">Sonarr URL</label>
+                <input 
+                    type="url" 
+                    id="sonarr-url" 
+                    name="url" 
+                    value="{{ sonarr.url if sonarr else '' }}"
+                    placeholder="http://localhost:8989"
+                    required
+                >
+            </div>
+            <div class="form-group">
+                <label for="sonarr-api-key">API Key</label>
+                <input 
+                    type="password" 
+                    id="sonarr-api-key" 
+                    name="api_key" 
+                    value="{{ sonarr.api_key if sonarr else '' }}"
+                    placeholder="Your Sonarr API key"
+                    required
+                >
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save & Test</button>
+                {% if sonarr and sonarr.verified %}
+                <span class="status-badge success">✓ Connected</span>
+                {% elif sonarr %}
+                <span class="status-badge error">✗ Not Connected</span>
+                {% endif %}
+            </div>
+        </form>
+    </section>
+
+    <!-- Users & Libraries -->
+    <section class="config-section" x-data="libraryConfig()">
+        <h2>Users & Libraries</h2>
+        
+        {% if emby and emby.verified %}
+        <form method="POST" action="/config/sync-emby" class="sync-form">
+            <button type="submit" class="btn btn-secondary">Sync from Emby</button>
+        </form>
+        
+        {% if libraries %}
+        <div class="libraries-list">
+            <h3>Libraries</h3>
+            <p class="help-text">Enable libraries to process and select which users must have watched.</p>
+            
+            {% for library in libraries %}
+            <div class="library-card" x-data="{ expanded: false }">
+                <div class="library-header" @click="expanded = !expanded">
+                    <label class="toggle-label">
+                        <input 
+                            type="checkbox" 
+                            {% if library.is_enabled %}checked{% endif %}
+                            @change="toggleLibrary('{{ library.id }}')"
+                            @click.stop
+                        >
+                        <span>{{ library.name }}</span>
+                    </label>
+                    <span class="expand-icon" x-text="expanded ? '▼' : '▶'"></span>
+                </div>
+                
+                <div class="library-details" x-show="expanded" x-collapse>
+                    <p class="library-path">{{ library.path }}</p>
+                    
+                    <div class="user-checkboxes">
+                        <p>Required watchers:</p>
+                        {% for user in users %}
+                        <label class="checkbox-label">
+                            <input 
+                                type="checkbox"
+                                {% if user.id in mapping_lookup.get(library.id, []) %}checked{% endif %}
+                                @change="updateUsers('{{ library.id }}')"
+                                data-library="{{ library.id }}"
+                                data-user="{{ user.id }}"
+                                class="user-checkbox"
+                            >
+                            {{ user.name }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-state">No libraries synced. Click "Sync from Emby" to load.</p>
+        {% endif %}
+        
+        {% else %}
+        <p class="empty-state">Connect to Emby first to configure libraries.</p>
+        {% endif %}
+    </section>
+
+    <!-- Settings -->
+    <section class="config-section">
+        <h2>Settings</h2>
+        <form method="POST" action="/config/settings" class="config-form">
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input 
+                        type="checkbox" 
+                        name="dry_run" 
+                        value="true"
+                        {% if settings.dry_run %}checked{% endif %}
+                    >
+                    Dry Run Mode (simulate without making changes)
+                </label>
+            </div>
+            <div class="form-group">
+                <label>Schedule Time</label>
+                <div class="time-inputs">
+                    <input 
+                        type="number" 
+                        name="schedule_hour" 
+                        value="{{ settings.schedule_hour }}"
+                        min="0" max="23"
+                        class="time-input"
+                    > : 
+                    <input 
+                        type="number" 
+                        name="schedule_minute" 
+                        value="{{ settings.schedule_minute }}"
+                        min="0" max="59"
+                        class="time-input"
+                    >
+                </div>
+                <p class="help-text">Daily processing time (24-hour format)</p>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function libraryConfig() {
+    return {
+        async toggleLibrary(libraryId) {
+            try {
+                await fetch(`/config/library/${libraryId}/toggle`, { method: 'POST' });
+            } catch (e) {
+                console.error('Failed to toggle library:', e);
+            }
+        },
+        
+        async updateUsers(libraryId) {
+            const checkboxes = document.querySelectorAll(`.user-checkbox[data-library="${libraryId}"]:checked`);
+            const userIds = Array.from(checkboxes).map(cb => cb.dataset.user);
+            
+            try {
+                await fetch(`/config/library/${libraryId}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_ids: userIds })
+                });
+            } catch (e) {
+                console.error('Failed to update users:', e);
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

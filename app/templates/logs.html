@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - Afterwatch{% endblock %}
+
+{% block content %}
+<h1>Processing Logs</h1>
+
+<!-- Recent Runs -->
+<section class="logs-section">
+    <h2>Recent Runs</h2>
+    {% if runs %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Started</th>
+                <th>Status</th>
+                <th>Trigger</th>
+                <th>Episodes</th>
+                <th>Reclaimed</th>
+                <th>Mode</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in runs %}
+            <tr>
+                <td>{{ run.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                    <span class="status-badge {{ 'success' if run.status == 'completed' else 'error' if run.status == 'failed' else 'pending' }}">
+                        {{ run.status }}
+                    </span>
+                </td>
+                <td>{{ run.trigger }}</td>
+                <td>{{ run.episodes_processed }} / {{ run.episodes_processed + run.episodes_failed }}</td>
+                <td>{{ "%.2f"|format(run.bytes_reclaimed / (1024*1024)) }} MB</td>
+                <td>{{ 'Dry Run' if run.dry_run else 'Live' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No runs yet.</p>
+    {% endif %}
+</section>
+
+<!-- Episode Logs -->
+<section class="logs-section">
+    <h2>Episode Log</h2>
+    
+    <!-- Filters -->
+    <form method="GET" class="filters-form">
+        <input 
+            type="text" 
+            name="series" 
+            value="{{ series_filter or '' }}"
+            placeholder="Filter by series..."
+            class="filter-input"
+        >
+        <select name="success_only" class="filter-select">
+            <option value="">All Results</option>
+            <option value="true" {% if success_filter == true %}selected{% endif %}>Success Only</option>
+            <option value="false" {% if success_filter == false %}selected{% endif %}>Failures Only</option>
+        </select>
+        <button type="submit" class="btn btn-secondary">Filter</button>
+    </form>
+    
+    {% if logs %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Series</th>
+                <th>Episode</th>
+                <th>Size</th>
+                <th>Status</th>
+                <th>Mode</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ log.series_name }}</td>
+                <td>S{{ '%02d'|format(log.season_number) }}E{{ '%02d'|format(log.episode_number) }}</td>
+                <td>{{ "%.2f"|format(log.original_size_bytes / (1024*1024)) }} MB</td>
+                <td>
+                    {% if log.success %}
+                    <span class="status-badge success">✓</span>
+                    {% else %}
+                    <span class="status-badge error" title="{{ log.error_message }}">✗</span>
+                    {% endif %}
+                </td>
+                <td>{{ 'Dry' if log.dry_run else 'Live' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <!-- Pagination -->
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}&series={{ series_filter or '' }}&success_only={{ success_filter or '' }}" class="btn btn-secondary">← Previous</a>
+        {% endif %}
+        <span>Page {{ page }}</span>
+        {% if logs|length == per_page %}
+        <a href="?page={{ page + 1 }}&series={{ series_filter or '' }}&success_only={{ success_filter or '' }}" class="btn btn-secondary">Next →</a>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="empty-state">No episodes processed yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

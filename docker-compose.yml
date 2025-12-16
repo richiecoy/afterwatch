@@ -1,0 +1,16 @@
+services:
+  afterwatch:
+    image: ghcr.io/richiecoy/afterwatch:latest
+    container_name: afterwatch
+    restart: unless-stopped
+    ports:
+      - "8199:8199"
+    volumes:
+      # Persistent data (config, database, logs)
+      - ./data:/app/data
+      # Mount your media directories (adjust paths as needed)
+      # - /mnt/path/to/tvshows:/media/tvshows
+      # - /mnt/path/to/cartoons:/media/cartoons
+      # - /mnt/path/to/tvshows-archive:/media/tvshows-archive
+    environment:
+      - TZ=America/New_York  # Adjust to your timezone
