@@ -162,16 +162,19 @@ async def sync_emby_data(
     # Sync libraries
     libraries = await client.get_libraries()
     for lib in libraries:
-        lib_id = lib.get("ItemId", lib.get("Id", ""))
+        lib_id = str(lib.get("ItemId", lib.get("Id", "")))
+        lib_guid = lib.get("Guid", "")
         lib_path = lib.get("Locations", [""])[0] if lib.get("Locations") else ""
         
         existing = await session.get(EmbyLibrary, lib_id)
         if existing:
             existing.name = lib["Name"]
             existing.path = lib_path
+            existing.guid = lib_guid
         else:
             session.add(EmbyLibrary(
                 id=lib_id,
+                guid=lib_guid,
                 name=lib["Name"],
                 path=lib_path,
                 is_enabled=False
