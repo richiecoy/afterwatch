@@ -6,7 +6,7 @@
 <h1>Processing Logs</h1>
 
 <!-- Recent Runs -->
-<section class="logs-section">
+<section class="logs-section" x-data="runsSection()">
     <h2>Recent Runs</h2>
     {% if runs %}
     <table class="data-table">
@@ -25,13 +25,31 @@
             <tr>
                 <td>{{ run.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
                 <td>
-                    <span class="status-badge {{ 'success' if run.status == 'completed' else 'error' if run.status == 'failed' else 'pending' }}">
+                    {% if run.status == 'running' %}
+                    <span class="status-badge pending" x-text="progressText">
+                        running
+                    </span>
+                    {% else %}
+                    <span class="status-badge {{ 'success' if run.status == 'completed' else 'error' }}">
                         {{ run.status }}
                     </span>
+                    {% endif %}
                 </td>
                 <td>{{ run.trigger }}</td>
-                <td>{{ run.episodes_processed }} / {{ run.episodes_processed + run.episodes_failed }}</td>
-                <td>{{ format_size(run.bytes_reclaimed) }}</td>
+                <td>
+                    {% if run.status == 'running' %}
+                    <span x-text="episodesText">{{ run.episodes_processed }} / {{ run.episodes_processed + run.episodes_failed }}</span>
+                    {% else %}
+                    {{ run.episodes_processed }} / {{ run.episodes_processed + run.episodes_failed }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if run.status == 'running' %}
+                    <span x-text="reclaimedText">{{ format_size(run.bytes_reclaimed) }}</span>
+                    {% else %}
+                    {{ format_size(run.bytes_reclaimed) }}
+                    {% endif %}
+                </td>
                 <td>{{ 'Dry Run' if run.dry_run else 'Live' }}</td>
             </tr>
             {% endfor %}
@@ -40,6 +58,11 @@
     {% else %}
     <p class="empty-state">No runs yet.</p>
     {% endif %}
+    
+    <!-- Export Failures Button -->
+    <div class="export-actions">
+        <a href="/api/export-failures" class="btn btn-secondary">Export Failures (CSV)</a>
+    </div>
 </section>
 
 <!-- Episode Logs -->
@@ -129,6 +152,58 @@
 
 {% block scripts %}
 <script>
+function formatSize(bytes) {
+    if (bytes >= 1024 ** 4) return (bytes / 1024 ** 4).toFixed(2) + ' TB';
+    if (bytes >= 1024 ** 3) return (bytes / 1024 ** 3).toFixed(2) + ' GB';
+    if (bytes >= 1024 ** 2) return (bytes / 1024 ** 2).toFixed(2) + ' MB';
+    if (bytes >= 1024) return (bytes / 1024).toFixed(2) + ' KB';
+    return bytes + ' B';
+}
+
+function runsSection() {
+    return {
+        progressText: 'running',
+        episodesText: '0 / 0',
+        reclaimedText: '0 B',
+        
+        init() {
+            this.pollProgress();
+        },
+        
+        async pollProgress() {
+            try {
+                const response = await fetch('/api/progress');
+                const data = await response.json();
+                
+                if (data.is_running) {
+                    const total = data.total_count || '?';
+                    const current = data.processed_count + data.failed_count;
+                    
+                    if (data.current_series) {
+                        this.progressText = `running - ${data.current_series} ${data.current_episode} (${current}/${total})`;
+                    } else {
+                        this.progressText = `running (${current}/${total})`;
+                    }
+                    
+                    this.episodesText = `${data.processed_count} / ${current}`;
+                    this.reclaimedText = formatSize(data.bytes_reclaimed);
+                    
+                    // Continue polling
+                    setTimeout(() => this.pollProgress(), 2000);
+                } else {
+                    // Reload page when done to get final stats
+                    if (this.progressText !== 'running') {
+                        window.location.reload();
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch progress:', e);
+                setTimeout(() => this.pollProgress(), 5000);
+            }
+        }
+    }
+}
+
 function episodeLogs() {
     return {
         async processSingle(logId) {
