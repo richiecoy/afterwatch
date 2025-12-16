@@ -211,6 +211,14 @@ async def process_watched_episodes(trigger: str = "manual"):
     
     dry_run = settings.dry_run
     
+    # Get user library access once at the start
+    try:
+        user_access = await emby.get_all_user_library_access()
+        logger.info(f"Loaded library access for {len(user_access)} users")
+    except Exception as e:
+        logger.error(f"Failed to get user library access: {e}")
+        return
+    
     async with async_session() as session:
         # Create run record
         run = ProcessRun(
@@ -245,9 +253,23 @@ async def process_watched_episodes(trigger: str = "manual"):
                     logger.warning(f"  No required users configured, skipping")
                     continue
                 
-                # Get watched episodes (from perspective of first required user)
+                # Filter to only users who have access to this library
+                accessible_users = []
+                for user_id in required_users:
+                    user_libs = user_access.get(user_id)
+                    # None means all access, or check if library is in their list
+                    if user_libs is None or library.id in user_libs:
+                        accessible_users.append(user_id)
+                
+                if not accessible_users:
+                    logger.warning(f"  No required users have access to this library, skipping")
+                    continue
+                
+                logger.info(f"  Required users with access: {len(accessible_users)}/{len(required_users)}")
+                
+                # Get watched episodes (from perspective of first accessible user)
                 watched = await emby.get_watched_episodes(
-                    required_users[0], 
+                    accessible_users[0], 
                     library.id
                 )
                 
@@ -255,7 +277,7 @@ async def process_watched_episodes(trigger: str = "manual"):
                 
                 for episode in watched:
                     log = await process_episode(
-                        emby, sonarr, episode, required_users,
+                        emby, sonarr, episode, accessible_users,
                         dry_run, session, run.id
                     )
                     
