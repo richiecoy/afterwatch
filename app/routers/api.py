@@ -52,6 +52,24 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
         "dry_run": settings.dry_run
     }
 
+@router.get("/last-run")
+async def get_last_run(session: AsyncSession = Depends(get_session)):
+    """Get the last processing run."""
+    result = await session.execute(
+        select(ProcessRun).order_by(desc(ProcessRun.started_at)).limit(1)
+    )
+    run = result.scalar_one_or_none()
+    
+    if not run:
+        return JSONResponse(None, status_code=204)
+    
+    return {
+        "started_at": run.started_at.strftime('%m/%d/%Y, %I:%M:%S %p'),
+        "status": run.status,
+        "episodes_processed": run.episodes_processed,
+        "dry_run": run.dry_run
+    }
+
 
 @router.post("/process")
 async def trigger_process():
