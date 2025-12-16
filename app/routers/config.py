@@ -136,6 +136,8 @@ async def sync_emby_data(
     session: AsyncSession = Depends(get_session)
 ):
     """Sync users and libraries from Emby."""
+    from app.models import EmbyLibraryFolder
+    
     result = await session.execute(
         select(Connection).where(Connection.service == "emby")
     )
@@ -159,12 +161,13 @@ async def sync_emby_data(
                 is_active=True
             ))
     
-    # Sync libraries
+    # Sync libraries and their folders
     libraries = await client.get_libraries()
     for lib in libraries:
         lib_id = str(lib.get("ItemId", lib.get("Id", "")))
         lib_guid = lib.get("Guid", "")
-        lib_path = lib.get("Locations", [""])[0] if lib.get("Locations") else ""
+        locations = lib.get("Locations", [])
+        lib_path = locations[0] if locations else ""
         
         existing = await session.get(EmbyLibrary, lib_id)
         if existing:
@@ -179,10 +182,33 @@ async def sync_emby_data(
                 path=lib_path,
                 is_enabled=False
             ))
+        
+        # Sync folder mappings
+        # Pattern: subfolder_id = library_id + 2 + index
+        lib_id_int = int(lib_id)
+        for i, folder_path in enumerate(locations):
+            subfolder_id = lib_id_int + 2 + i
+            
+            # Check if mapping exists
+            result = await session.execute(
+                select(EmbyLibraryFolder).where(
+                    EmbyLibraryFolder.library_id == lib_id,
+                    EmbyLibraryFolder.subfolder_id == subfolder_id
+                )
+            )
+            existing_folder = result.scalar_one_or_none()
+            
+            if existing_folder:
+                existing_folder.path = folder_path
+            else:
+                session.add(EmbyLibraryFolder(
+                    library_id=lib_id,
+                    subfolder_id=subfolder_id,
+                    path=folder_path
+                ))
     
     await session.commit()
     return RedirectResponse(url="/config", status_code=303)
-
 
 @router.post("/library/{library_id}/toggle")
 async def toggle_library(
