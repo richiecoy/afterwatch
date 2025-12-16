@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
 
 from app.database import get_session
-from app.models import Connection, EmbyUser, EmbyLibrary, LibraryUserMapping
+from app.models import Connection, EmbyUser, EmbyLibrary, LibraryUserMapping, EmbyLibraryFolder
 from app.services.emby import EmbyClient
 from app.services.sonarr import SonarrClient
 from app.config import settings
