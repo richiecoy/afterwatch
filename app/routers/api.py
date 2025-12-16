@@ -1,71 +1,116 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
-from sqlalchemy import select, func
+from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+import csv
+import io
 
 from app.database import get_session
-from app.models import ProcessLog, ProcessRun
-from app.services.processor import process_watched_episodes
+from app.models import ProcessRun, ProcessLog
 from app.config import settings
+from app.progress import progress
 
 router = APIRouter()
 
 
-@router.post("/process")
-async def trigger_processing(background_tasks: BackgroundTasks):
-    """Manually trigger processing."""
-    background_tasks.add_task(process_watched_episodes, "manual")
-    return {"status": "started", "dry_run": settings.dry_run}
+def format_size(bytes_val: int) -> str:
+    """Format bytes to human readable size."""
+    if bytes_val >= 1024 ** 4:
+        return f"{bytes_val / (1024 ** 4):.2f} TB"
+    elif bytes_val >= 1024 ** 3:
+        return f"{bytes_val / (1024 ** 3):.2f} GB"
+    elif bytes_val >= 1024 ** 2:
+        return f"{bytes_val / (1024 ** 2):.2f} MB"
+    elif bytes_val >= 1024:
+        return f"{bytes_val / 1024:.2f} KB"
+    else:
+        return f"{bytes_val} B"
 
 
 @router.get("/stats")
 async def get_stats(session: AsyncSession = Depends(get_session)):
     """Get dashboard statistics."""
-    # Total episodes processed
-    total_result = await session.execute(
-        select(func.count(ProcessLog.id)).where(
-            ProcessLog.success == True,
-            ProcessLog.dry_run == False
-        )
+    # Get latest run
+    result = await session.execute(
+        select(ProcessRun).order_by(desc(ProcessRun.started_at)).limit(1)
     )
-    total_processed = total_result.scalar() or 0
+    last_run = result.scalar_one_or_none()
     
-    # Total bytes reclaimed
-    bytes_result = await session.execute(
-        select(func.sum(ProcessLog.original_size_bytes)).where(
-            ProcessLog.success == True,
-            ProcessLog.dry_run == False
-        )
+    # Get totals from all live runs
+    result = await session.execute(
+        select(ProcessRun).where(ProcessRun.dry_run == False)
     )
-    total_bytes = bytes_result.scalar() or 0
+    runs = result.scalars().all()
     
-    # Recent runs
-    runs_result = await session.execute(
-        select(ProcessRun).order_by(ProcessRun.started_at.desc()).limit(5)
-    )
-    recent_runs = runs_result.scalars().all()
-    
-    # Last run status
-    last_run = recent_runs[0] if recent_runs else None
+    total_episodes = sum(r.episodes_processed for r in runs)
+    total_bytes = sum(r.bytes_reclaimed for r in runs)
     
     return {
-        "total_episodes_processed": total_processed,
-        "total_bytes_reclaimed": total_bytes,
-        "total_gb_reclaimed": round(total_bytes / (1024**3), 2),
-        "last_run": {
-            "timestamp": last_run.started_at.isoformat() if last_run else None,
-            "status": last_run.status if last_run else None,
-            "episodes": last_run.episodes_processed if last_run else 0,
-            "dry_run": last_run.dry_run if last_run else False
-        } if last_run else None,
-        "dry_run_enabled": settings.dry_run
+        "episodes_processed": total_episodes,
+        "space_reclaimed": format_size(total_bytes),
+        "last_run_status": last_run.status if last_run else "never",
+        "dry_run": settings.dry_run
     }
 
 
-@router.get("/status")
-async def get_status():
-    """Get current processing status."""
-    return {
-        "dry_run": settings.dry_run,
-        "schedule_enabled": settings.schedule_enabled,
-        "schedule_time": f"{settings.schedule_hour:02d}:{settings.schedule_minute:02d}"
-    }
+@router.post("/process")
+async def trigger_process():
+    """Trigger a processing run."""
+    from app.services.processor import process_watched_episodes
+    import asyncio
+    
+    # Run in background
+    asyncio.create_task(process_watched_episodes(trigger="manual"))
+    
+    return {"status": "started"}
+
+
+@router.get("/progress")
+async def get_progress():
+    """Get current processing progress."""
+    return JSONResponse(progress.to_dict())
+
+
+@router.get("/export-failures")
+async def export_failures(session: AsyncSession = Depends(get_session)):
+    """Export failed processing logs as CSV."""
+    result = await session.execute(
+        select(ProcessLog).where(
+            ProcessLog.success == False,
+            ProcessLog.dry_run == False
+        ).order_by(
+            ProcessLog.series_name,
+            ProcessLog.season_number,
+            ProcessLog.episode_number
+        )
+    )
+    logs = result.scalars().all()
+    
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow([
+        "Series", "Season", "Episode", "Title", "Folder", "Path", "Error"
+    ])
+    
+    # Data
+    for log in logs:
+        writer.writerow([
+            log.series_name,
+            log.season_number,
+            log.episode_number,
+            log.episode_title,
+            log.folder_name,
+            log.original_path,
+            log.error_message
+        ])
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=afterwatch_failures.csv"}
+    )
