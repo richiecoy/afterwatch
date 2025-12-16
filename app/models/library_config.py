@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, ForeignKey, JSON
+from sqlalchemy import String, Boolean, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -18,7 +18,8 @@ class EmbyLibrary(Base):
     
     __tablename__ = "emby_libraries"
     
-    id: Mapped[str] = mapped_column(String(100), primary_key=True)  # Emby library ID
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)  # Emby ItemId (for API calls)
+    guid: Mapped[str] = mapped_column(String(100), nullable=True)  # Emby Guid (for user access)
     name: Mapped[str] = mapped_column(String(200))
     path: Mapped[str] = mapped_column(String(1000))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=False)  # Process this library
@@ -32,5 +33,4 @@ class LibraryUserMapping(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     library_id: Mapped[str] = mapped_column(String(100), ForeignKey("emby_libraries.id"))
     user_id: Mapped[str] = mapped_column(String(100), ForeignKey("emby_users.id"))
-    # If True, this user must have watched for the episode to be processed
     required: Mapped[bool] = mapped_column(Boolean, default=True)
