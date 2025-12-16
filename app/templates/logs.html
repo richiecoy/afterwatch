@@ -31,7 +31,7 @@
                 </td>
                 <td>{{ run.trigger }}</td>
                 <td>{{ run.episodes_processed }} / {{ run.episodes_processed + run.episodes_failed }}</td>
-                <td>{{ "%.2f"|format(run.bytes_reclaimed / (1024*1024)) }} MB</td>
+                <td>{{ format_size(run.bytes_reclaimed) }}</td>
                 <td>{{ 'Dry Run' if run.dry_run else 'Live' }}</td>
             </tr>
             {% endfor %}
@@ -67,10 +67,11 @@
     <table class="data-table">
         <thead>
             <tr>
-                <th>Time</th>
                 <th>Series</th>
                 <th>Episode</th>
+                <th>Folder</th>
                 <th>Size</th>
+                <th>Watched By</th>
                 <th>Status</th>
                 <th>Mode</th>
             </tr>
@@ -78,10 +79,11 @@
         <tbody>
             {% for log in logs %}
             <tr>
-                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
                 <td>{{ log.series_name }}</td>
                 <td>S{{ '%02d'|format(log.season_number) }}E{{ '%02d'|format(log.episode_number) }}</td>
-                <td>{{ "%.2f"|format(log.original_size_bytes / (1024*1024)) }} MB</td>
+                <td>{{ log.folder_name or '-' }}</td>
+                <td>{{ format_size(log.original_size_bytes) }}</td>
+                <td>{{ log.watched_by or '-' }}</td>
                 <td>
                     {% if log.success %}
                     <span class="status-badge success">✓</span>
