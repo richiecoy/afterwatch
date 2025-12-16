@@ -65,11 +65,14 @@ class EmbyClient:
                 return []
             return policy.get("EnabledFolders", [])
     
-    async def get_all_user_library_access(self) -> dict[str, set[str] | None]:
+    async def get_all_user_access_details(self) -> dict[str, dict]:
         """
-        Get library access for all users.
-        Returns dict of user_id -> set of library_ids they can access.
-        None value means user has access to ALL libraries.
+        Get full library access details for all users.
+        Returns dict of user_id -> {
+            'all_access': bool,
+            'enabled_folders': set of library GUIDs,
+            'excluded_subfolders': set of subfolder IDs (integers)
+        }
         """
         users = await self.get_users()
         access_map = {}
@@ -86,10 +89,23 @@ class EmbyClient:
                 user_data = response.json()
                 
                 policy = user_data.get("Policy", {})
-                if policy.get("EnableAllFolders", True):
-                    access_map[user_id] = None
-                else:
-                    access_map[user_id] = set(policy.get("EnabledFolders", []))
+                
+                # Parse excluded subfolders - format is "libraryGuid_subfolderId"
+                excluded = set()
+                for item in policy.get("ExcludedSubFolders", []):
+                    if "_" in item:
+                        parts = item.rsplit("_", 1)
+                        if len(parts) == 2:
+                            try:
+                                excluded.add(int(parts[1]))
+                            except ValueError:
+                                pass
+                
+                access_map[user_id] = {
+                    'all_access': policy.get("EnableAllFolders", True),
+                    'enabled_folders': set(policy.get("EnabledFolders", [])),
+                    'excluded_subfolders': excluded
+                }
         
         return access_map
     
