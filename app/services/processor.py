@@ -335,11 +335,17 @@ async def process_watched_episodes(trigger: str = "manual"):
                 folder_mappings = await get_folder_mappings(session, library.id)
                 logger.info(f"  Loaded {len(folder_mappings)} folder mappings")
                 
-                # Get watched episodes from first required user's perspective
-                watched = await emby.get_watched_episodes(
-                    required_users[0], 
-                    library.id
-                )
+                # Get watched episodes from ALL required users and combine
+                # (different users may see different folders)
+                all_watched = {}
+                for user_id in required_users:
+                    user_watched = await emby.get_watched_episodes(user_id, library.id)
+                    for ep in user_watched:
+                        ep_id = ep.get("Id")
+                        if ep_id not in all_watched:
+                            all_watched[ep_id] = ep
+                
+                watched = list(all_watched.values())
                 
                 logger.info(f"  Found {len(watched)} watched episodes to check")
                 
