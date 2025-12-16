@@ -19,18 +19,25 @@ async def logs_page(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=10, le=100),
     series: Optional[str] = Query(None),
-    success_only: Optional[bool] = Query(None),
+    success_only: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session)
 ):
     """View processing logs."""
+    # Convert success_only string to bool
+    success_filter = None
+    if success_only == "true":
+        success_filter = True
+    elif success_only == "false":
+        success_filter = False
+    
     # Build query
     query = select(ProcessLog).order_by(desc(ProcessLog.timestamp))
     
     if series:
         query = query.where(ProcessLog.series_name.ilike(f"%{series}%"))
     
-    if success_only is not None:
-        query = query.where(ProcessLog.success == success_only)
+    if success_filter is not None:
+        query = query.where(ProcessLog.success == success_filter)
     
     # Paginate
     offset = (page - 1) * per_page
@@ -54,7 +61,7 @@ async def logs_page(
             "page": page,
             "per_page": per_page,
             "series_filter": series,
-            "success_filter": success_only
+            "success_filter": success_filter
         }
     )
 
