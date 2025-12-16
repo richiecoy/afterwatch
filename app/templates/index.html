@@ -5,32 +5,34 @@
 {% block content %}
 <h1>Dashboard</h1>
 
-<div class="stats-grid" x-data="dashboard()" x-init="loadStats()">
-    <div class="stat-card">
-        <div class="stat-value" x-text="episodes">0</div>
-        <div class="stat-label">Episodes Processed</div>
+<div x-data="dashboard()" x-init="loadStats()">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" x-text="episodes">0</div>
+            <div class="stat-label">Episodes Processed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" x-text="space">0 GB</div>
+            <div class="stat-label">Space Reclaimed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" x-text="status">Never</div>
+            <div class="stat-label">Last Run Status</div>
+        </div>
+        <div class="stat-card" :class="{ 'warning': dryRun }">
+            <div class="stat-value" x-text="dryRun ? 'ON' : 'OFF'">OFF</div>
+            <div class="stat-label">Dry Run Mode</div>
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-value" x-text="space">0 GB</div>
-        <div class="stat-label">Space Reclaimed</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" x-text="status">Never</div>
-        <div class="stat-label">Last Run Status</div>
-    </div>
-    <div class="stat-card" :class="{ 'warning': dryRun }">
-        <div class="stat-value" x-text="dryRun ? 'ON' : 'OFF'">OFF</div>
-        <div class="stat-label">Dry Run Mode</div>
-    </div>
-</div>
 
-<section class="actions-section">
-    <h2>Actions</h2>
-    <button class="btn btn-primary" @click="runNow()">Run Now</button>
-    <p class="warning-text" x-show="dryRun">
-        ⚠ Dry run mode is enabled. Processing will simulate actions without making changes.
-    </p>
-</section>
+    <section class="actions-section">
+        <h2>Actions</h2>
+        <button class="btn btn-primary" @click="runNow()">Run Now</button>
+        <p class="warning-text" x-show="dryRun">
+            ⚠ Dry run mode is enabled. Processing will simulate actions without making changes.
+        </p>
+    </section>
+</div>
 
 <section class="last-run-section" x-data="lastRun()" x-init="loadLastRun()">
     <h2>Last Run</h2>
@@ -85,7 +87,7 @@ function dashboard() {
         async runNow() {
             try {
                 await fetch('/api/process', { method: 'POST' });
-                alert('Processing started! Check the Logs page for progress.');
+                window.location.href = '/logs/';
             } catch (e) {
                 alert('Failed to start processing: ' + e.message);
             }
