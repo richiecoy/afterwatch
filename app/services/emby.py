@@ -41,7 +41,6 @@ class EmbyClient:
     async def get_libraries(self) -> list[dict]:
         """Get all media libraries from Emby."""
         async with httpx.AsyncClient() as client:
-            # Get virtual folders (libraries)
             response = await client.get(
                 f"{self.base_url}/Library/VirtualFolders",
                 headers=self.headers,
@@ -61,39 +60,38 @@ class EmbyClient:
             response.raise_for_status()
             user_data = response.json()
             
-            # Get enabled folders from user policy
             policy = user_data.get("Policy", {})
             if policy.get("EnableAllFolders", True):
-                return []  # Empty list means all folders
+                return []
             return policy.get("EnabledFolders", [])
-
+    
     async def get_all_user_library_access(self) -> dict[str, set[str] | None]:
-    """
-    Get library access for all users.
-    Returns dict of user_id -> set of library_ids they can access.
-    None value means user has access to ALL libraries.
-    """
-    users = await self.get_users()
-    access_map = {}
-    
-    async with httpx.AsyncClient() as client:
-        for user in users:
-            user_id = user["Id"]
-            response = await client.get(
-                f"{self.base_url}/Users/{user_id}",
-                headers=self.headers,
-                timeout=10.0
-            )
-            response.raise_for_status()
-            user_data = response.json()
-            
-            policy = user_data.get("Policy", {})
-            if policy.get("EnableAllFolders", True):
-                access_map[user_id] = None  # None = all access
-            else:
-                access_map[user_id] = set(policy.get("EnabledFolders", []))
-    
-    return access_map
+        """
+        Get library access for all users.
+        Returns dict of user_id -> set of library_ids they can access.
+        None value means user has access to ALL libraries.
+        """
+        users = await self.get_users()
+        access_map = {}
+        
+        async with httpx.AsyncClient() as client:
+            for user in users:
+                user_id = user["Id"]
+                response = await client.get(
+                    f"{self.base_url}/Users/{user_id}",
+                    headers=self.headers,
+                    timeout=10.0
+                )
+                response.raise_for_status()
+                user_data = response.json()
+                
+                policy = user_data.get("Policy", {})
+                if policy.get("EnableAllFolders", True):
+                    access_map[user_id] = None
+                else:
+                    access_map[user_id] = set(policy.get("EnabledFolders", []))
+        
+        return access_map
     
     async def get_watched_episodes(self, user_id: str, library_id: str) -> list[dict]:
         """Get all watched episodes for a user in a specific library."""
@@ -132,23 +130,4 @@ class EmbyClient:
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    user_data = data.get("UserData", {})
-                    results[user_id] = user_data.get("Played", False)
-                else:
-                    results[user_id] = False
-        return results
-    
-    async def refresh_library(self, library_id: Optional[str] = None):
-        """Trigger a library refresh."""
-        async with httpx.AsyncClient() as client:
-            if library_id:
-                url = f"{self.base_url}/Items/{library_id}/Refresh"
-            else:
-                url = f"{self.base_url}/Library/Refresh"
-            
-            response = await client.post(
-                url,
-                headers=self.headers,
-                timeout=10.0
-            )
-            response.raise_for_status()
+                    user_data = data.get("UserData", {
