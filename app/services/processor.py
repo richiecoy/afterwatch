@@ -116,6 +116,7 @@ async def process_episode(
     episode: dict,
     required_users: list[str],
     user_access_map: dict,
+    user_names: dict[str, str],  # user_id -> user_name mapping
     library_guid: str,
     folder_mappings: dict[int, str],
     dry_run: bool,
@@ -143,6 +144,13 @@ async def process_episode(
     if file_path.lower().endswith(".strm"):
         return None
     
+    # Get folder name from path
+    folder_name = None
+    subfolder_id = get_subfolder_id_for_path(file_path, folder_mappings)
+    if subfolder_id:
+        folder_path = folder_mappings.get(subfolder_id, "")
+        folder_name = Path(folder_path).name if folder_path else None
+    
     # Filter required users to only those who can access this file's folder
     accessible_users = [
         user_id for user_id in required_users
@@ -150,7 +158,6 @@ async def process_episode(
     ]
     
     if not accessible_users:
-        # No required users can access this file, skip
         return None
     
     # Check if all accessible required users have watched
@@ -158,7 +165,11 @@ async def process_episode(
     if not all(watched_status.values()):
         return None
     
-    logger.info(f"Processing: {series_name} S{season_num:02d}E{episode_num:02d} ({len(accessible_users)} users)")
+    # Get names of users who watched
+    watched_by_names = [user_names.get(uid, uid) for uid in accessible_users if watched_status.get(uid)]
+    watched_by = ", ".join(watched_by_names)
+    
+    logger.info(f"Processing: {series_name} S{season_num:02d}E{episode_num:02d} ({watched_by})")
     
     # Get file size before deletion
     try:
@@ -175,6 +186,8 @@ async def process_episode(
         original_path=file_path,
         original_size_bytes=file_size,
         strm_path=str(Path(file_path).with_suffix(".strm")),
+        folder_name=folder_name,
+        watched_by=watched_by,
         dry_run=dry_run
     )
     
