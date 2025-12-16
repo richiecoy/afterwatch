@@ -3,102 +3,108 @@
 {% block title %}Dashboard - Afterwatch{% endblock %}
 
 {% block content %}
-<div x-data="dashboard()" x-init="loadStats()">
-    <h1>Dashboard</h1>
-    
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-value" x-text="stats.total_episodes_processed">-</div>
-            <div class="stat-label">Episodes Processed</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" x-text="stats.total_gb_reclaimed + ' GB'">- GB</div>
-            <div class="stat-label">Space Reclaimed</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" x-text="stats.last_run ? stats.last_run.status : 'Never'">-</div>
-            <div class="stat-label">Last Run Status</div>
-        </div>
-        <div class="stat-card" :class="{ 'warning': stats.dry_run_enabled }">
-            <div class="stat-value" x-text="stats.dry_run_enabled ? 'ON' : 'OFF'">-</div>
-            <div class="stat-label">Dry Run Mode</div>
-        </div>
+<h1>Dashboard</h1>
+
+<div class="stats-grid" x-data="dashboard()" x-init="loadStats()">
+    <div class="stat-card">
+        <div class="stat-value" x-text="episodes">0</div>
+        <div class="stat-label">Episodes Processed</div>
     </div>
-    
-    <div class="actions-panel">
-        <h2>Actions</h2>
-        <button 
-            @click="runProcess()" 
-            :disabled="processing"
-            class="btn btn-primary"
-        >
-            <span x-show="!processing">Run Now</span>
-            <span x-show="processing">Processing...</span>
-        </button>
-        <p class="action-note" x-show="stats.dry_run_enabled">
-            ⚠️ Dry run mode is enabled. Processing will simulate actions without making changes.
-        </p>
+    <div class="stat-card">
+        <div class="stat-value" x-text="space">0 GB</div>
+        <div class="stat-label">Space Reclaimed</div>
     </div>
-    
-    <div class="recent-activity" x-show="stats.last_run">
-        <h2>Last Run</h2>
-        <table class="data-table">
-            <tr>
-                <th>Time</th>
-                <td x-text="stats.last_run ? new Date(stats.last_run.timestamp).toLocaleString() : '-'"></td>
-            </tr>
-            <tr>
-                <th>Status</th>
-                <td x-text="stats.last_run ? stats.last_run.status : '-'"></td>
-            </tr>
-            <tr>
-                <th>Episodes</th>
-                <td x-text="stats.last_run ? stats.last_run.episodes : '-'"></td>
-            </tr>
-            <tr>
-                <th>Mode</th>
-                <td x-text="stats.last_run && stats.last_run.dry_run ? 'Dry Run' : 'Live'"></td>
-            </tr>
-        </table>
+    <div class="stat-card">
+        <div class="stat-value" x-text="status">Never</div>
+        <div class="stat-label">Last Run Status</div>
+    </div>
+    <div class="stat-card" :class="{ 'warning': dryRun }">
+        <div class="stat-value" x-text="dryRun ? 'ON' : 'OFF'">OFF</div>
+        <div class="stat-label">Dry Run Mode</div>
     </div>
 </div>
+
+<section class="actions-section">
+    <h2>Actions</h2>
+    <button class="btn btn-primary" @click="runNow()">Run Now</button>
+    <p class="warning-text" x-show="dryRun">
+        ⚠ Dry run mode is enabled. Processing will simulate actions without making changes.
+    </p>
+</section>
+
+<section class="last-run-section" x-data="lastRun()" x-init="loadLastRun()">
+    <h2>Last Run</h2>
+    <template x-if="run">
+        <div class="last-run-details">
+            <div class="detail-row">
+                <span class="detail-label">Time</span>
+                <span class="detail-value" x-text="run.started_at"></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Status</span>
+                <span class="detail-value" x-text="run.status"></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Episodes</span>
+                <span class="detail-value" x-text="run.episodes_processed"></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Mode</span>
+                <span class="detail-value" x-text="run.dry_run ? 'Dry Run' : 'Live'"></span>
+            </div>
+        </div>
+    </template>
+    <template x-if="!run">
+        <p class="empty-state">No runs yet.</p>
+    </template>
+</section>
 {% endblock %}
 
 {% block scripts %}
 <script>
 function dashboard() {
     return {
-        stats: {
-            total_episodes_processed: 0,
-            total_gb_reclaimed: 0,
-            last_run: null,
-            dry_run_enabled: true
-        },
-        processing: false,
+        episodes: 0,
+        space: '0 GB',
+        status: 'Never',
+        dryRun: false,
         
         async loadStats() {
             try {
                 const response = await fetch('/api/stats');
-                this.stats = await response.json();
+                const data = await response.json();
+                this.episodes = data.episodes_processed || 0;
+                this.space = data.space_reclaimed || '0 B';
+                this.status = data.last_run_status || 'Never';
+                this.dryRun = data.dry_run || false;
             } catch (e) {
                 console.error('Failed to load stats:', e);
             }
         },
         
-        async runProcess() {
-            this.processing = true;
+        async runNow() {
             try {
-                const response = await fetch('/api/process', { method: 'POST' });
-                const result = await response.json();
-                alert(result.dry_run 
-                    ? 'Processing started (dry run mode)' 
-                    : 'Processing started');
-                // Refresh stats after a delay
-                setTimeout(() => this.loadStats(), 5000);
+                await fetch('/api/process', { method: 'POST' });
+                alert('Processing started! Check the Logs page for progress.');
             } catch (e) {
                 alert('Failed to start processing: ' + e.message);
-            } finally {
-                this.processing = false;
+            }
+        }
+    }
+}
+
+function lastRun() {
+    return {
+        run: null,
+        
+        async loadLastRun() {
+            try {
+                const response = await fetch('/api/last-run');
+                if (response.ok) {
+                    this.run = await response.json();
+                }
+            } catch (e) {
+                console.error('Failed to load last run:', e);
             }
         }
     }
