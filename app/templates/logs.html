@@ -43,7 +43,7 @@
 </section>
 
 <!-- Episode Logs -->
-<section class="logs-section">
+<section class="logs-section" x-data="episodeLogs()">
     <h2>Episode Log</h2>
     
     <!-- Filters -->
@@ -74,11 +74,12 @@
                 <th>Watched By</th>
                 <th>Status</th>
                 <th>Mode</th>
+                <th>Action</th>
             </tr>
         </thead>
         <tbody>
             {% for log in logs %}
-            <tr>
+            <tr id="log-row-{{ log.id }}">
                 <td>{{ log.series_name }}</td>
                 <td>S{{ '%02d'|format(log.season_number) }}E{{ '%02d'|format(log.episode_number) }}</td>
                 <td>{{ log.folder_name or '-' }}</td>
@@ -91,7 +92,20 @@
                     <span class="status-badge error" title="{{ log.error_message }}">✗</span>
                     {% endif %}
                 </td>
-                <td>{{ 'Dry' if log.dry_run else 'Live' }}</td>
+                <td id="mode-{{ log.id }}">{{ 'Dry' if log.dry_run else 'Live' }}</td>
+                <td>
+                    {% if log.dry_run and log.success %}
+                    <button 
+                        class="btn btn-small btn-primary"
+                        id="btn-{{ log.id }}"
+                        @click="processSingle({{ log.id }})"
+                    >
+                        Process
+                    </button>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -111,4 +125,41 @@
     <p class="empty-state">No episodes processed yet.</p>
     {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function episodeLogs() {
+    return {
+        async processSingle(logId) {
+            const btn = document.getElementById(`btn-${logId}`);
+            const modeCell = document.getElementById(`mode-${logId}`);
+            
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+            
+            try {
+                const response = await fetch(`/logs/process-single/${logId}`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    btn.textContent = 'Done!';
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-success');
+                    modeCell.textContent = 'Live';
+                } else {
+                    btn.textContent = 'Failed';
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-error');
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                btn.textContent = 'Error';
+                btn.classList.add('btn-error');
+                alert('Error: ' + e.message);
+            }
+        }
+    }
+}
+</script>
 {% endblock %}
