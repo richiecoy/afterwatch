@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
@@ -319,6 +319,17 @@ async def process_watched_episodes(trigger: str = "manual"):
         user_names = {}
     
     async with async_session() as session:
+        # Clear previous dry run logs if this is a dry run
+        if dry_run:
+            await session.execute(
+                delete(ProcessLog).where(ProcessLog.dry_run == True)
+            )
+            await session.execute(
+                delete(ProcessRun).where(ProcessRun.dry_run == True)
+            )
+            await session.commit()
+            logger.info("Cleared previous dry run logs")
+        
         # Get excluded user IDs
         excluded_user_ids = await get_excluded_user_ids(session)
         if excluded_user_ids:
