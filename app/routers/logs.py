@@ -13,6 +13,18 @@ router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 
 
+def format_size(bytes_val: int) -> str:
+    """Format bytes to human readable size."""
+    if bytes_val >= 1024 ** 3:
+        return f"{bytes_val / (1024 ** 3):.2f} GB"
+    elif bytes_val >= 1024 ** 2:
+        return f"{bytes_val / (1024 ** 2):.2f} MB"
+    elif bytes_val >= 1024:
+        return f"{bytes_val / 1024:.2f} KB"
+    else:
+        return f"{bytes_val} B"
+
+
 @router.get("/", response_class=HTMLResponse)
 async def logs_page(
     request: Request,
@@ -30,8 +42,12 @@ async def logs_page(
     elif success_only == "false":
         success_filter = False
     
-    # Build query
-    query = select(ProcessLog).order_by(desc(ProcessLog.timestamp))
+    # Build query - sort by series, season, episode
+    query = select(ProcessLog).order_by(
+        ProcessLog.series_name,
+        ProcessLog.season_number,
+        ProcessLog.episode_number
+    )
     
     if series:
         query = query.where(ProcessLog.series_name.ilike(f"%{series}%"))
@@ -61,7 +77,8 @@ async def logs_page(
             "page": page,
             "per_page": per_page,
             "series_filter": series,
-            "success_filter": success_filter
+            "success_filter": success_filter,
+            "format_size": format_size
         }
     )
 
@@ -82,14 +99,15 @@ async def run_details(
             status_code=404
         )
     
-    # Get logs for this run
-    # Note: We'd need to add run_id to ProcessLog to properly link these
-    # For now, get logs around the run time
     result = await session.execute(
         select(ProcessLog).where(
             ProcessLog.timestamp >= run.started_at,
             ProcessLog.timestamp <= (run.completed_at or run.started_at)
-        ).order_by(ProcessLog.timestamp)
+        ).order_by(
+            ProcessLog.series_name,
+            ProcessLog.season_number,
+            ProcessLog.episode_number
+        )
     )
     logs = result.scalars().all()
     
@@ -98,6 +116,7 @@ async def run_details(
         {
             "request": request,
             "run": run,
-            "logs": logs
+            "logs": logs,
+            "format_size": format_size
         }
     )
