@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models import (
-    Connection, EmbyLibrary, EmbyLibraryFolder, LibraryUserMapping, 
+    Connection, EmbyLibrary, EmbyLibraryFolder, EmbyUser, LibraryUserMapping, 
     ProcessLog, ProcessRun
 )
 from app.services.emby import EmbyClient
@@ -58,6 +58,15 @@ async def get_library_required_users(
     )
     mappings = result.scalars().all()
     return [m.user_id for m in mappings]
+
+
+async def get_excluded_user_ids(session: AsyncSession) -> set[str]:
+    """Get set of user IDs that are marked as excluded."""
+    result = await session.execute(
+        select(EmbyUser).where(EmbyUser.is_excluded == True)
+    )
+    users = result.scalars().all()
+    return {u.id for u in users}
 
 
 async def get_folder_mappings(
@@ -115,6 +124,7 @@ async def process_episode(
     sonarr: SonarrClient,
     episode: dict,
     required_users: list[str],
+    excluded_user_ids: set[str],
     user_access_map: dict,
     user_names: dict[str, str],
     library_guid: str,
@@ -150,6 +160,13 @@ async def process_episode(
     if subfolder_id:
         folder_path = folder_mappings.get(subfolder_id, "")
         folder_name = Path(folder_path).name if folder_path else None
+    
+    # Check if any excluded user can access this file - if so, skip it
+    for user_id in excluded_user_ids:
+        user_access = user_access_map.get(user_id, {})
+        if user_can_access_file(file_path, user_access, library_guid, folder_mappings):
+            # An excluded user can see this file, skip it
+            return None
     
     # Filter required users to only those who can access this file's folder
     accessible_users = [
@@ -298,6 +315,12 @@ async def process_watched_episodes(trigger: str = "manual"):
         user_names = {}
     
     async with async_session() as session:
+        # Get excluded user IDs
+        excluded_user_ids = await get_excluded_user_ids(session)
+        if excluded_user_ids:
+            excluded_names = [user_names.get(uid, uid) for uid in excluded_user_ids]
+            logger.info(f"Excluded users: {', '.join(excluded_names)}")
+        
         # Create run record
         run = ProcessRun(
             trigger=trigger,
@@ -336,7 +359,6 @@ async def process_watched_episodes(trigger: str = "manual"):
                 logger.info(f"  Loaded {len(folder_mappings)} folder mappings")
                 
                 # Get watched episodes from ALL required users and combine
-                # (different users may see different folders)
                 all_watched = {}
                 for user_id in required_users:
                     user_watched = await emby.get_watched_episodes(user_id, library.id)
@@ -352,7 +374,8 @@ async def process_watched_episodes(trigger: str = "manual"):
                 for episode in watched:
                     log = await process_episode(
                         emby, sonarr, episode, required_users,
-                        user_access, user_names, library.guid, folder_mappings,
+                        excluded_user_ids, user_access, user_names, 
+                        library.guid, folder_mappings,
                         dry_run, session, run.id
                     )
                     
