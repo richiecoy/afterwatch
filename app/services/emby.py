@@ -130,4 +130,23 @@ class EmbyClient:
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    user_data = data.get("UserData", {
+                    user_data = data.get("UserData", {})
+                    results[user_id] = user_data.get("Played", False)
+                else:
+                    results[user_id] = False
+        return results
+    
+    async def refresh_library(self, library_id: Optional[str] = None):
+        """Trigger a library refresh."""
+        async with httpx.AsyncClient() as client:
+            if library_id:
+                url = f"{self.base_url}/Items/{library_id}/Refresh"
+            else:
+                url = f"{self.base_url}/Library/Refresh"
+            
+            response = await client.post(
+                url,
+                headers=self.headers,
+                timeout=10.0
+            )
+            response.raise_for_status()
