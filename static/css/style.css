@@ -417,3 +417,19 @@ h2 {
         min-width: 100%;
     }
 }
+
+/* Small buttons */
+.btn-small {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.btn-success {
+    background-color: #22c55e;
+    color: white;
+}
+
+.btn-error {
+    background-color: #ef4444;
+    color: white;
+}
