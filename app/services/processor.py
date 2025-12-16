@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models import (
-    Connection, EmbyLibrary, LibraryUserMapping, 
+    Connection, EmbyLibrary, EmbyLibraryFolder, LibraryUserMapping, 
     ProcessLog, ProcessRun
 )
 from app.services.emby import EmbyClient
@@ -23,13 +23,11 @@ logger = logging.getLogger(__name__)
 async def get_clients() -> tuple[Optional[EmbyClient], Optional[SonarrClient]]:
     """Get configured Emby and Sonarr clients."""
     async with async_session() as session:
-        # Get Emby connection
         result = await session.execute(
             select(Connection).where(Connection.service == "emby")
         )
         emby_conn = result.scalar_one_or_none()
         
-        # Get Sonarr connection
         result = await session.execute(
             select(Connection).where(Connection.service == "sonarr")
         )
@@ -62,11 +60,64 @@ async def get_library_required_users(
     return [m.user_id for m in mappings]
 
 
+async def get_folder_mappings(
+    session: AsyncSession,
+    library_id: str
+) -> dict[int, str]:
+    """Get subfolder_id -> path mapping for a library."""
+    result = await session.execute(
+        select(EmbyLibraryFolder).where(
+            EmbyLibraryFolder.library_id == library_id
+        )
+    )
+    folders = result.scalars().all()
+    return {f.subfolder_id: f.path for f in folders}
+
+
+def get_subfolder_id_for_path(file_path: str, folder_mappings: dict[int, str]) -> Optional[int]:
+    """Find which subfolder a file belongs to based on its path."""
+    for subfolder_id, folder_path in folder_mappings.items():
+        if file_path.startswith(folder_path):
+            return subfolder_id
+    return None
+
+
+def user_can_access_file(
+    file_path: str,
+    user_access: dict,
+    library_guid: str,
+    folder_mappings: dict[int, str]
+) -> bool:
+    """Check if a user can access a specific file based on their permissions."""
+    # If user has all access, they can see everything
+    if user_access.get('all_access', False):
+        return True
+    
+    # Check if user has access to the library
+    if library_guid not in user_access.get('enabled_folders', set()):
+        return False
+    
+    # Check if the file's folder is excluded
+    subfolder_id = get_subfolder_id_for_path(file_path, folder_mappings)
+    if subfolder_id is None:
+        # Can't determine folder, assume accessible
+        return True
+    
+    # If subfolder is in excluded list, user can't access
+    if subfolder_id in user_access.get('excluded_subfolders', set()):
+        return False
+    
+    return True
+
+
 async def process_episode(
     emby: EmbyClient,
     sonarr: SonarrClient,
     episode: dict,
     required_users: list[str],
+    user_access_map: dict,
+    library_guid: str,
+    folder_mappings: dict[int, str],
     dry_run: bool,
     session: AsyncSession,
     run_id: int
@@ -82,7 +133,6 @@ async def process_episode(
     # Get file path from episode
     media_sources = episode.get("MediaSources", [])
     if not media_sources:
-        logger.warning(f"No media source for {series_name} S{season_num:02d}E{episode_num:02d}")
         return None
     
     file_path = media_sources[0].get("Path", "")
@@ -93,13 +143,22 @@ async def process_episode(
     if file_path.lower().endswith(".strm"):
         return None
     
-    # Check if all required users have watched
-    watched_status = await emby.check_episode_watched(episode_id, required_users)
-    if not all(watched_status.values()):
-        # Not all users have watched
+    # Filter required users to only those who can access this file's folder
+    accessible_users = [
+        user_id for user_id in required_users
+        if user_can_access_file(file_path, user_access_map.get(user_id, {}), library_guid, folder_mappings)
+    ]
+    
+    if not accessible_users:
+        # No required users can access this file, skip
         return None
     
-    logger.info(f"Processing: {series_name} S{season_num:02d}E{episode_num:02d}")
+    # Check if all accessible required users have watched
+    watched_status = await emby.check_episode_watched(episode_id, accessible_users)
+    if not all(watched_status.values()):
+        return None
+    
+    logger.info(f"Processing: {series_name} S{season_num:02d}E{episode_num:02d} ({len(accessible_users)} users)")
     
     # Get file size before deletion
     try:
@@ -122,7 +181,6 @@ async def process_episode(
     if dry_run:
         log_entry.success = True
         session.add(log_entry)
-        logger.info(f"  [DRY RUN] Would process {file_path}")
         return log_entry
     
     try:
@@ -170,7 +228,7 @@ async def process_episode(
         
         # Step 5: Create STRM placeholder
         strm_path = Path(file_path).with_suffix(".strm")
-        strm_path.touch()  # Creates empty file
+        strm_path.touch()
         log_entry.strm_created = True
         logger.info(f"  Created STRM placeholder")
         
@@ -182,7 +240,6 @@ async def process_episode(
         await asyncio.sleep(2)
         
         # Step 7: Trigger rename in Sonarr
-        # Need to get the new file ID after refresh
         new_file = await sonarr.get_episode_file_by_path(str(strm_path))
         if new_file:
             await sonarr.rename_files(series_id, [new_file["id"]])
@@ -211,12 +268,12 @@ async def process_watched_episodes(trigger: str = "manual"):
     
     dry_run = settings.dry_run
     
-    # Get user library access once at the start
+    # Get user access details once at the start
     try:
-        user_access = await emby.get_all_user_library_access()
-        logger.info(f"Loaded library access for {len(user_access)} users")
+        user_access = await emby.get_all_user_access_details()
+        logger.info(f"Loaded access details for {len(user_access)} users")
     except Exception as e:
-        logger.error(f"Failed to get user library access: {e}")
+        logger.error(f"Failed to get user access details: {e}")
         return
     
     async with async_session() as session:
@@ -253,31 +310,23 @@ async def process_watched_episodes(trigger: str = "manual"):
                     logger.warning(f"  No required users configured, skipping")
                     continue
                 
-                # Filter to only users who have access to this library
-                accessible_users = []
-                for user_id in required_users:
-                    user_libs = user_access.get(user_id)
-                    # None means all access, or check if library GUID is in their list
-                    if user_libs is None or (library.guid and library.guid in user_libs):
-                        accessible_users.append(user_id)
+                # Get folder mappings for this library
+                folder_mappings = await get_folder_mappings(session, library.id)
+                logger.info(f"  Loaded {len(folder_mappings)} folder mappings")
                 
-                if not accessible_users:
-                    logger.warning(f"  No required users have access to this library, skipping")
-                    continue
-                
-                logger.info(f"  Required users with access: {len(accessible_users)}/{len(required_users)}")
-                
-                # Get watched episodes (from perspective of first accessible user)
+                # Get watched episodes from first required user's perspective
+                # (we'll filter by individual folder access later)
                 watched = await emby.get_watched_episodes(
-                    accessible_users[0], 
+                    required_users[0], 
                     library.id
                 )
                 
-                logger.info(f"  Found {len(watched)} watched episodes")
+                logger.info(f"  Found {len(watched)} watched episodes to check")
                 
                 for episode in watched:
                     log = await process_episode(
-                        emby, sonarr, episode, accessible_users,
+                        emby, sonarr, episode, required_users,
+                        user_access, library.guid, folder_mappings,
                         dry_run, session, run.id
                     )
                     
