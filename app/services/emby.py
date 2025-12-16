@@ -66,6 +66,34 @@ class EmbyClient:
             if policy.get("EnableAllFolders", True):
                 return []  # Empty list means all folders
             return policy.get("EnabledFolders", [])
+
+    async def get_all_user_library_access(self) -> dict[str, set[str] | None]:
+    """
+    Get library access for all users.
+    Returns dict of user_id -> set of library_ids they can access.
+    None value means user has access to ALL libraries.
+    """
+    users = await self.get_users()
+    access_map = {}
+    
+    async with httpx.AsyncClient() as client:
+        for user in users:
+            user_id = user["Id"]
+            response = await client.get(
+                f"{self.base_url}/Users/{user_id}",
+                headers=self.headers,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            user_data = response.json()
+            
+            policy = user_data.get("Policy", {})
+            if policy.get("EnableAllFolders", True):
+                access_map[user_id] = None  # None = all access
+            else:
+                access_map[user_id] = set(policy.get("EnabledFolders", []))
+    
+    return access_map
     
     async def get_watched_episodes(self, user_id: str, library_id: str) -> list[dict]:
         """Get all watched episodes for a user in a specific library."""
