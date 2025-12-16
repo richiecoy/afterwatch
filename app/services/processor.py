@@ -116,7 +116,7 @@ async def process_episode(
     episode: dict,
     required_users: list[str],
     user_access_map: dict,
-    user_names: dict[str, str],  # user_id -> user_name mapping
+    user_names: dict[str, str],
     library_guid: str,
     folder_mappings: dict[int, str],
     dry_run: bool,
@@ -289,6 +289,14 @@ async def process_watched_episodes(trigger: str = "manual"):
         logger.error(f"Failed to get user access details: {e}")
         return
     
+    # Build user_id -> name mapping
+    try:
+        users = await emby.get_users()
+        user_names = {u["Id"]: u["Name"] for u in users}
+    except Exception as e:
+        logger.error(f"Failed to get user names: {e}")
+        user_names = {}
+    
     async with async_session() as session:
         # Create run record
         run = ProcessRun(
@@ -328,7 +336,6 @@ async def process_watched_episodes(trigger: str = "manual"):
                 logger.info(f"  Loaded {len(folder_mappings)} folder mappings")
                 
                 # Get watched episodes from first required user's perspective
-                # (we'll filter by individual folder access later)
                 watched = await emby.get_watched_episodes(
                     required_users[0], 
                     library.id
@@ -339,7 +346,7 @@ async def process_watched_episodes(trigger: str = "manual"):
                 for episode in watched:
                     log = await process_episode(
                         emby, sonarr, episode, required_users,
-                        user_access, library.guid, folder_mappings,
+                        user_access, user_names, library.guid, folder_mappings,
                         dry_run, session, run.id
                     )
                     
