@@ -80,6 +80,32 @@
         </form>
     </section>
 
+    <!-- Excluded Users -->
+    <section class="config-section" x-data="excludedUsers()">
+        <h2>Excluded Users</h2>
+        <p class="help-text">Files accessible by excluded users will never be processed, regardless of watch status.</p>
+        
+        {% if users %}
+        <div class="user-list">
+            {% for user in users %}
+            <label class="checkbox-label">
+                <input 
+                    type="checkbox"
+                    {% if user.is_excluded %}checked{% endif %}
+                    @change="toggleExcluded('{{ user.id }}')"
+                >
+                {{ user.name }}
+                {% if user.is_excluded %}
+                <span class="status-badge error">Excluded</span>
+                {% endif %}
+            </label>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-state">No users synced. Connect to Emby and sync first.</p>
+        {% endif %}
+    </section>
+
     <!-- Users & Libraries -->
     <section class="config-section" x-data="libraryConfig()">
         <h2>Users & Libraries</h2>
@@ -186,6 +212,18 @@
 
 {% block scripts %}
 <script>
+function excludedUsers() {
+    return {
+        async toggleExcluded(userId) {
+            try {
+                await fetch(`/config/user/${userId}/toggle-excluded`, { method: 'POST' });
+            } catch (e) {
+                console.error('Failed to toggle excluded:', e);
+            }
+        }
+    }
+}
+
 function libraryConfig() {
     return {
         async toggleLibrary(libraryId) {
