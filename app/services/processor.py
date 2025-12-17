@@ -155,6 +155,18 @@ async def process_episode(
     strm_version = str(Path(file_path).with_suffix(".strm"))
     if not os.path.exists(file_path) and os.path.exists(strm_version):
         return None
+
+    # Skip if already processed in a previous run
+    from sqlalchemy import select as sql_select
+    existing = await session.execute(
+        sql_select(ProcessLog).where(
+            ProcessLog.original_path == file_path,
+            ProcessLog.success == True,
+            ProcessLog.dry_run == False
+        )
+    )
+    if existing.scalar_one_or_none():
+        return None
     
     folder_name = None
     subfolder_id = get_subfolder_id_for_path(file_path, folder_mappings)
