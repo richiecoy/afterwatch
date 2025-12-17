@@ -59,10 +59,68 @@
     <p class="empty-state">No runs yet.</p>
     {% endif %}
     
-    <!-- Export Failures Button -->
     <div class="export-actions">
         <a href="/api/export-failures" class="btn btn-secondary">Export Failures (CSV)</a>
     </div>
+</section>
+
+<!-- Orphaned Files -->
+<section class="logs-section" x-data="orphansSection()" x-init="loadOrphans()">
+    <h2>Orphaned Files</h2>
+    <p class="help-text">Files found in Emby but not tracked in Sonarr.</p>
+    
+    <template x-if="loading">
+        <p>Loading...</p>
+    </template>
+    
+    <template x-if="!loading && orphans.length === 0">
+        <p class="empty-state">No orphaned files found.</p>
+    </template>
+    
+    <template x-if="!loading && orphans.length > 0">
+        <div>
+            <div class="orphan-summary">
+                <span x-text="orphans.length + ' orphaned files'"></span>
+                <span> · </span>
+                <span x-text="totalSize + ' can be reclaimed'"></span>
+            </div>
+            
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Series</th>
+                        <th>Episode</th>
+                        <th>Folder</th>
+                        <th>Size</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="orphan in orphans" :key="orphan.id">
+                        <tr>
+                            <td x-text="orphan.series_name"></td>
+                            <td x-text="'S' + String(orphan.season_number).padStart(2, '0') + 'E' + String(orphan.episode_number).padStart(2, '0')"></td>
+                            <td x-text="orphan.folder_name || '-'"></td>
+                            <td x-text="orphan.size_formatted"></td>
+                            <td>
+                                <span class="status-badge" :class="orphan.exists ? 'pending' : 'error'" x-text="orphan.exists ? 'Exists' : 'Missing'"></span>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            
+            <div class="orphan-actions">
+                <button 
+                    class="btn btn-danger" 
+                    @click="deleteOrphans()"
+                    :disabled="deleting"
+                    x-text="deleting ? 'Deleting...' : 'Delete All Orphaned Files'"
+                >
+                </button>
+            </div>
+        </div>
+    </template>
 </section>
 
 <!-- Episode Logs -->
@@ -188,10 +246,8 @@ function runsSection() {
                     this.episodesText = `${data.processed_count} / ${current}`;
                     this.reclaimedText = formatSize(data.bytes_reclaimed);
                     
-                    // Continue polling
                     setTimeout(() => this.pollProgress(), 2000);
                 } else {
-                    // Reload page when done to get final stats
                     if (this.progressText !== 'running') {
                         window.location.reload();
                     }
@@ -199,6 +255,50 @@ function runsSection() {
             } catch (e) {
                 console.error('Failed to fetch progress:', e);
                 setTimeout(() => this.pollProgress(), 5000);
+            }
+        }
+    }
+}
+
+function orphansSection() {
+    return {
+        loading: true,
+        orphans: [],
+        totalSize: '0 B',
+        deleting: false,
+        
+        async loadOrphans() {
+            try {
+                const response = await fetch('/api/orphans');
+                const data = await response.json();
+                this.orphans = data.orphans;
+                this.totalSize = data.total_size_formatted;
+            } catch (e) {
+                console.error('Failed to load orphans:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async deleteOrphans() {
+            if (!confirm(`Delete ${this.orphans.length} orphaned files? This cannot be undone.`)) {
+                return;
+            }
+            
+            this.deleting = true;
+            
+            try {
+                const response = await fetch('/api/delete-orphans', { method: 'POST' });
+                const data = await response.json();
+                
+                alert(`Deleted ${data.deleted_count} files, reclaimed ${data.deleted_size_formatted}`);
+                
+                // Reload the orphans list
+                await this.loadOrphans();
+            } catch (e) {
+                alert('Failed to delete orphans: ' + e.message);
+            } finally {
+                this.deleting = false;
             }
         }
     }
