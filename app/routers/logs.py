@@ -44,12 +44,8 @@ async def logs_page(
     elif success_only == "false":
         success_filter = False
     
-    # Build query - sort by series, season, episode
-    query = select(ProcessLog).order_by(
-        ProcessLog.series_name,
-        ProcessLog.season_number,
-        ProcessLog.episode_number
-    )
+    # Build query - sort by most recent first
+    query = select(ProcessLog).order_by(desc(ProcessLog.timestamp))
     
     if series:
         query = query.where(ProcessLog.series_name.ilike(f"%{series}%"))
