@@ -199,6 +199,7 @@ async def delete_orphans(session: AsyncSession = Depends(get_session)):
     
     deleted_count = 0
     deleted_bytes = 0
+    cleared_count = 0
     errors = []
     
     for log in logs:
@@ -208,17 +209,22 @@ async def delete_orphans(session: AsyncSession = Depends(get_session)):
                 os.remove(log.original_path)
                 deleted_count += 1
                 deleted_bytes += size
-                
-                # Update log entry to mark as handled
-                log.error_message = "Orphaned file deleted"
-                log.success = True
             except Exception as e:
                 errors.append(f"{log.original_path}: {str(e)}")
+                continue
+        else:
+            # File already missing
+            cleared_count += 1
+        
+        # Mark as handled either way
+        log.error_message = "Orphaned file deleted"
+        log.success = True
     
     await session.commit()
     
     return {
         "deleted_count": deleted_count,
+        "cleared_count": cleared_count,
         "deleted_bytes": deleted_bytes,
         "deleted_size_formatted": format_size(deleted_bytes),
         "errors": errors
