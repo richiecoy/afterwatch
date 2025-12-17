@@ -132,3 +132,94 @@ async def export_failures(session: AsyncSession = Depends(get_session)):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=afterwatch_failures.csv"}
     )
+@router.get("/orphans")
+async def get_orphans(session: AsyncSession = Depends(get_session)):
+    """Get list of orphaned files (in Emby but not in Sonarr)."""
+    result = await session.execute(
+        select(ProcessLog).where(
+            ProcessLog.success == False,
+            ProcessLog.dry_run == False,
+            ProcessLog.error_message.like("%Could not find file in Sonarr%")
+        ).order_by(
+            ProcessLog.series_name,
+            ProcessLog.season_number,
+            ProcessLog.episode_number
+        )
+    )
+    logs = result.scalars().all()
+    
+    orphans = []
+    total_size = 0
+    
+    for log in logs:
+        # Check if file still exists
+        import os
+        exists = os.path.exists(log.original_path)
+        size = 0
+        if exists:
+            try:
+                size = os.path.getsize(log.original_path)
+                total_size += size
+            except OSError:
+                pass
+        
+        orphans.append({
+            "id": log.id,
+            "series_name": log.series_name,
+            "season_number": log.season_number,
+            "episode_number": log.episode_number,
+            "episode_title": log.episode_title,
+            "folder_name": log.folder_name,
+            "path": log.original_path,
+            "size": size,
+            "size_formatted": format_size(size),
+            "exists": exists
+        })
+    
+    return {
+        "orphans": orphans,
+        "total_count": len(orphans),
+        "total_size": total_size,
+        "total_size_formatted": format_size(total_size)
+    }
+
+@router.post("/delete-orphans")
+async def delete_orphans(session: AsyncSession = Depends(get_session)):
+    """Delete all orphaned files."""
+    import os
+    
+    result = await session.execute(
+        select(ProcessLog).where(
+            ProcessLog.success == False,
+            ProcessLog.dry_run == False,
+            ProcessLog.error_message.like("%Could not find file in Sonarr%")
+        )
+    )
+    logs = result.scalars().all()
+    
+    deleted_count = 0
+    deleted_bytes = 0
+    errors = []
+    
+    for log in logs:
+        if os.path.exists(log.original_path):
+            try:
+                size = os.path.getsize(log.original_path)
+                os.remove(log.original_path)
+                deleted_count += 1
+                deleted_bytes += size
+                
+                # Update log entry to mark as handled
+                log.error_message = "Orphaned file deleted"
+                log.success = True
+            except Exception as e:
+                errors.append(f"{log.original_path}: {str(e)}")
+    
+    await session.commit()
+    
+    return {
+        "deleted_count": deleted_count,
+        "deleted_bytes": deleted_bytes,
+        "deleted_size_formatted": format_size(deleted_bytes),
+        "errors": errors
+    }
