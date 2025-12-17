@@ -520,3 +520,27 @@ h2 {
     padding-top: 1rem;
     border-top: 1px solid var(--bg-card);
 }
+
+/* Orphan section */
+.orphan-summary {
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+}
+
+.orphan-actions {
+    margin-top: 1rem;
+}
+
+.btn-danger {
+    background-color: #dc2626;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #b91c1c;
+}
+
+.btn-danger:disabled {
+    background-color: #6b7280;
+    cursor: not-allowed;
+}
