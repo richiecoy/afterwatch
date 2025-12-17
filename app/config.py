@@ -1,26 +1,11 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
-from pathlib import Path
 
 
 class Settings(BaseSettings):
-    """Application settings."""
-    
-    # Database
-    data_dir: Path = Field(default=Path("/app/data"))
-    database_url: str = Field(default="sqlite+aiosqlite:////app/data/afterwatch.db")
-    
-    # Server
-    host: str = Field(default="0.0.0.0")
-    port: int = Field(default=8199)
-    
-    # Scheduler
-    schedule_enabled: bool = Field(default=True)
-    schedule_hour: int = Field(default=3)  # 3 AM
-    schedule_minute: int = Field(default=0)
-    
-    # Processing
-    dry_run: bool = Field(default=True)  # Start in dry-run mode for safety
+    database_url: str = "sqlite+aiosqlite:///data/afterwatch.db"
+    dry_run: bool = True
+    schedule_hour: int = 3
+    schedule_minute: int = 0
     
     class Config:
         env_prefix = "AFTERWATCH_"
@@ -28,5 +13,37 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Ensure data directory exists
-settings.data_dir.mkdir(parents=True, exist_ok=True)
+
+async def load_settings_from_db():
+    """Load settings from database on startup."""
+    from app.database import async_session
+    from app.models import AppSettings
+    from sqlalchemy import select
+    
+    async with async_session() as session:
+        result = await session.execute(select(AppSettings))
+        app_settings = result.scalar_one_or_none()
+        
+        if app_settings:
+            settings.dry_run = app_settings.dry_run
+
+
+async def save_dry_run(value: bool):
+    """Save dry_run setting to database."""
+    from app.database import async_session
+    from app.models import AppSettings
+    from sqlalchemy import select
+    
+    async with async_session() as session:
+        result = await session.execute(select(AppSettings))
+        app_settings = result.scalar_one_or_none()
+        
+        if app_settings:
+            app_settings.dry_run = value
+        else:
+            app_settings = AppSettings(dry_run=value)
+            session.add(app_settings)
+        
+        await session.commit()
+    
+    settings.dry_run = value
