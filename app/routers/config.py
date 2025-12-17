@@ -268,16 +268,11 @@ async def toggle_user_excluded(
 @router.post("/settings")
 async def update_settings(
     dry_run: bool = Form(False),
-    schedule_hour: int = Form(3),
-    schedule_minute: int = Form(0),
     session: AsyncSession = Depends(get_session)
 ):
     """Update application settings."""
-    settings.dry_run = dry_run
-    settings.schedule_hour = schedule_hour
-    settings.schedule_minute = schedule_minute
+    from app.config import save_dry_run
     
-    from app.scheduler import update_schedule
-    update_schedule(schedule_hour, schedule_minute)
+    await save_dry_run(dry_run)
     
     return RedirectResponse(url="/config", status_code=303)
