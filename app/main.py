@@ -8,12 +8,14 @@ from pathlib import Path
 from app.database import init_db
 from app.routers import config_router, logs_router, api_router, schedule_router
 from app.scheduler import start_scheduler, stop_scheduler, update_schedule_from_db
+from app.config import load_settings_from_db, settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
+    await load_settings_from_db()
     start_scheduler()
     await update_schedule_from_db()
     yield
@@ -39,8 +41,6 @@ app.include_router(schedule_router, prefix="/schedule", tags=["schedule"])
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Home page with dashboard."""
-    from app.config import settings
-    
     return templates.TemplateResponse(
         "index.html",
         {
