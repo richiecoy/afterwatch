@@ -5,205 +5,154 @@
 {% block content %}
 <h1>Schedule</h1>
 
-<form method="POST" action="/schedule/save" class="config-form" x-data="scheduleForm()">
-    
-    <!-- Schedule Type -->
+<form method="POST" action="/schedule/" class="schedule-section">
     <section class="config-section">
         <h2>Schedule Type</h2>
-        
-        <div class="radio-group">
-            <label class="radio-label">
-                <input 
-                    type="radio" 
-                    name="schedule_type" 
-                    value="disabled"
-                    {% if schedule.schedule_type == 'disabled' %}checked{% endif %}
-                    @change="scheduleType = 'disabled'"
-                >
-                <span>Disabled</span>
-                <small>Manual runs only</small>
+        <div class="schedule-options">
+            <label class="schedule-option">
+                <input type="radio" name="schedule_type" value="disabled" 
+                    {% if not schedule or not schedule.enabled %}checked{% endif %}>
+                <div>
+                    <strong>Disabled</strong>
+                    <span class="option-desc">Manual runs only</span>
+                </div>
             </label>
             
-            <label class="radio-label">
-                <input 
-                    type="radio" 
-                    name="schedule_type" 
-                    value="daily"
-                    {% if schedule.schedule_type == 'daily' %}checked{% endif %}
-                    @change="scheduleType = 'daily'"
-                >
-                <span>Daily</span>
-                <small>Run once per day at a specific time</small>
+            <label class="schedule-option">
+                <input type="radio" name="schedule_type" value="daily"
+                    {% if schedule and schedule.enabled and schedule.schedule_type == 'daily' %}checked{% endif %}>
+                <div>
+                    <strong>Daily</strong>
+                    <span class="option-desc">Run once per day at a specific time</span>
+                </div>
             </label>
             
-            <label class="radio-label">
-                <input 
-                    type="radio" 
-                    name="schedule_type" 
-                    value="hourly"
-                    {% if schedule.schedule_type == 'hourly' %}checked{% endif %}
-                    @change="scheduleType = 'hourly'"
-                >
-                <span>Hourly</span>
-                <small>Run every hour (or every odd/even hour)</small>
+            <label class="schedule-option">
+                <input type="radio" name="schedule_type" value="hourly"
+                    {% if schedule and schedule.enabled and schedule.schedule_type == 'hourly' %}checked{% endif %}>
+                <div>
+                    <strong>Hourly</strong>
+                    <span class="option-desc">Run every hour (or every odd/even hour)</span>
+                </div>
             </label>
             
-            <label class="radio-label">
-                <input 
-                    type="radio" 
-                    name="schedule_type" 
-                    value="interval"
-                    {% if schedule.schedule_type == 'interval' %}checked{% endif %}
-                    @change="scheduleType = 'interval'"
-                >
-                <span>Interval</span>
-                <small>Run every N hours</small>
+            <label class="schedule-option">
+                <input type="radio" name="schedule_type" value="interval"
+                    {% if schedule and schedule.enabled and schedule.schedule_type == 'interval' %}checked{% endif %}>
+                <div>
+                    <strong>Interval</strong>
+                    <span class="option-desc">Run every N hours</span>
+                </div>
             </label>
         </div>
     </section>
     
-    <!-- Daily Options -->
-    <section class="config-section" x-show="scheduleType === 'daily'" x-collapse>
-        <h2>Daily Time</h2>
-        <div class="time-inputs">
-            <input 
-                type="number" 
-                name="daily_hour" 
-                value="{{ schedule.daily_hour }}"
-                min="0" max="23"
-                class="time-input"
-            > : 
-            <input 
-                type="number" 
-                name="daily_minute" 
-                value="{{ schedule.daily_minute }}"
-                min="0" max="59"
-                class="time-input"
-            >
-            <span class="help-text">(24-hour format)</span>
+    <section class="config-section">
+        <h2>Daily Options</h2>
+        <div class="form-group">
+            <label>Run at time:</label>
+            <div class="time-inputs">
+                <input type="number" name="daily_hour" min="0" max="23" 
+                    value="{{ schedule.daily_hour if schedule else 3 }}" class="time-input">
+                <span>:</span>
+                <input type="number" name="daily_minute" min="0" max="59"
+                    value="{{ schedule.daily_minute if schedule else 0 }}" class="time-input">
+            </div>
         </div>
     </section>
     
-    <!-- Hourly Options -->
-    <section class="config-section" x-show="scheduleType === 'hourly'" x-collapse>
+    <section class="config-section">
         <h2>Hourly Options</h2>
-        
         <div class="form-group">
             <label>Run at minute:</label>
-            <input 
-                type="number" 
-                name="daily_minute" 
-                value="{{ schedule.daily_minute }}"
-                min="0" max="59"
-                class="time-input"
-            >
+            <input type="number" name="hourly_minute" min="0" max="59"
+                value="{{ schedule.daily_minute if schedule else 0 }}" class="time-input">
         </div>
-        
         <div class="form-group">
             <label>Hour filter:</label>
-            <div class="radio-group horizontal">
-                <label class="radio-label">
-                    <input 
-                        type="radio" 
-                        name="hour_filter" 
-                        value="all"
-                        {% if schedule.hour_filter == 'all' %}checked{% endif %}
-                    >
-                    <span>Every hour</span>
+            <div class="hour-filter-options">
+                <label class="checkbox-label">
+                    <input type="radio" name="hour_filter" value=""
+                        {% if not schedule or not schedule.hour_filter %}checked{% endif %}>
+                    Every hour
                 </label>
-                <label class="radio-label">
-                    <input 
-                        type="radio" 
-                        name="hour_filter" 
-                        value="odd"
-                        {% if schedule.hour_filter == 'odd' %}checked{% endif %}
-                    >
-                    <span>Odd hours (1, 3, 5...)</span>
+                <label class="checkbox-label">
+                    <input type="radio" name="hour_filter" value="odd"
+                        {% if schedule and schedule.hour_filter == 'odd' %}checked{% endif %}>
+                    Odd hours (1, 3, 5...)
                 </label>
-                <label class="radio-label">
-                    <input 
-                        type="radio" 
-                        name="hour_filter" 
-                        value="even"
-                        {% if schedule.hour_filter == 'even' %}checked{% endif %}
-                    >
-                    <span>Even hours (0, 2, 4...)</span>
+                <label class="checkbox-label">
+                    <input type="radio" name="hour_filter" value="even"
+                        {% if schedule and schedule.hour_filter == 'even' %}checked{% endif %}>
+                    Even hours (0, 2, 4...)
                 </label>
             </div>
         </div>
     </section>
     
-    <!-- Interval Options -->
-    <section class="config-section" x-show="scheduleType === 'interval'" x-collapse>
-        <h2>Interval</h2>
+    <section class="config-section">
+        <h2>Interval Options</h2>
         <div class="form-group">
             <label>Run every:</label>
-            <input 
-                type="number" 
-                name="interval_hours" 
-                value="{{ schedule.interval_hours }}"
-                min="1" max="24"
-                class="time-input"
-            >
-            <span>hour(s)</span>
+            <div class="interval-input">
+                <input type="number" name="interval_hours" min="1" max="24"
+                    value="{{ schedule.interval_hours if schedule else 6 }}" class="time-input">
+                <span>hours</span>
+            </div>
         </div>
     </section>
     
-    <!-- Days of Week -->
-    <section class="config-section" x-show="scheduleType !== 'disabled' && scheduleType !== 'interval'" x-collapse>
+    <section class="config-section">
         <h2>Days to Run</h2>
-        <div class="checkbox-group horizontal">
+        <p class="help-text">Leave all unchecked to run every day.</p>
+        <div class="days-grid">
             <label class="checkbox-label">
-                <input type="checkbox" name="day_0" {% if 0 in days_list %}checked{% endif %}>
+                <input type="checkbox" name="days" value="mon"
+                    {% if schedule and schedule.days and 'mon' in schedule.days %}checked{% endif %}>
                 Mon
             </label>
             <label class="checkbox-label">
-                <input type="checkbox" name="day_1" {% if 1 in days_list %}checked{% endif %}>
+                <input type="checkbox" name="days" value="tue"
+                    {% if schedule and schedule.days and 'tue' in schedule.days %}checked{% endif %}>
                 Tue
             </label>
             <label class="checkbox-label">
-                <input type="checkbox" name="day_2" {% if 2 in days_list %}checked{% endif %}>
+                <input type="checkbox" name="days" value="wed"
+                    {% if schedule and schedule.days and 'wed' in schedule.days %}checked{% endif %}>
                 Wed
             </label>
             <label class="checkbox-label">
-                <input type="checkbox" name="day_3" {% if 3 in days_list %}checked{% endif %}>
+                <input type="checkbox" name="days" value="thu"
+                    {% if schedule and schedule.days and 'thu' in schedule.days %}checked{% endif %}>
                 Thu
             </label>
             <label class="checkbox-label">
-                <input type="checkbox" name="day_4" {% if 4 in days_list %}checked{% endif %}>
+                <input type="checkbox" name="days" value="fri"
+                    {% if schedule and schedule.days and 'fri' in schedule.days %}checked{% endif %}>
                 Fri
             </label>
             <label class="checkbox-label">
-                <input type="checkbox" name="day_5" {% if 5 in days_list %}checked{% endif %}>
+                <input type="checkbox" name="days" value="sat"
+                    {% if schedule and schedule.days and 'sat' in schedule.days %}checked{% endif %}>
                 Sat
             </label>
             <label class="checkbox-label">
-                <input type="checkbox" name="day_6" {% if 6 in days_list %}checked{% endif %}>
+                <input type="checkbox" name="days" value="sun"
+                    {% if schedule and schedule.days and 'sun' in schedule.days %}checked{% endif %}>
                 Sun
             </label>
         </div>
     </section>
     
-    <!-- Status -->
-    <section class="config-section">
+    <section class="config-section" x-data="scheduleStatus()" x-init="loadStatus()">
         <h2>Status</h2>
-        {% if schedule.enabled and next_run %}
-        <p class="status-info">
-            <span class="status-badge success">Active</span>
-            Next run: <strong>{{ next_run.strftime('%Y-%m-%d %H:%M') }}</strong>
-        </p>
-        {% elif schedule.enabled %}
-        <p class="status-info">
-            <span class="status-badge success">Active</span>
-            Calculating next run...
-        </p>
-        {% else %}
-        <p class="status-info">
-            <span class="status-badge pending">Disabled</span>
-            No scheduled runs
-        </p>
-        {% endif %}
+        <div class="schedule-status">
+            <span class="status-badge" :class="enabled ? 'success' : 'error'" x-text="enabled ? 'Active' : 'Disabled'"></span>
+            <span x-text="nextRun ? 'Next run: ' + nextRun : 'Calculating next run...'"></span>
+        </div>
     </section>
+    
+    <input type="hidden" name="enabled" value="true">
     
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Save Schedule</button>
@@ -213,9 +162,21 @@
 
 {% block scripts %}
 <script>
-function scheduleForm() {
+function scheduleStatus() {
     return {
-        scheduleType: '{{ schedule.schedule_type }}'
+        enabled: false,
+        nextRun: null,
+        
+        async loadStatus() {
+            try {
+                const response = await fetch('/api/schedule-info');
+                const data = await response.json();
+                this.enabled = data.enabled;
+                this.nextRun = data.next_run;
+            } catch (e) {
+                console.error('Failed to load schedule status:', e);
+            }
+        }
     }
 }
 </script>
