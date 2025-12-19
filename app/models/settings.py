@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean
+from sqlalchemy import String, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -10,3 +10,4 @@ class AppSettings(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True)
     dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
+    delay_days: Mapped[int] = mapped_column(Integer, default=7)
