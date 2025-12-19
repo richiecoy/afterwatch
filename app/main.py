@@ -9,6 +9,7 @@ from app.database import init_db
 from app.routers import config_router, logs_router, api_router, schedule_router
 from app.scheduler import start_scheduler, stop_scheduler, update_schedule_from_db
 from app.config import load_settings_from_db, settings
+from app.version import __version__
 
 
 @asynccontextmanager
@@ -23,13 +24,20 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="Afterwatch", lifespan=lifespan)
+app = FastAPI(title="Afterwatch", version=__version__, lifespan=lifespan)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=Path(__file__).parent.parent / "static"), name="static")
 
 # Templates
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+
+# Add version to all templates
+@app.middleware("http")
+async def add_version_to_templates(request: Request, call_next):
+    request.state.version = __version__
+    response = await call_next(request)
+    return response
 
 # Include routers
 app.include_router(config_router, prefix="/config", tags=["config"])
@@ -45,6 +53,7 @@ async def home(request: Request):
         "index.html",
         {
             "request": request,
-            "test_mode": settings.test_mode
+            "test_mode": settings.test_mode,
+            "version": __version__
         }
     )
