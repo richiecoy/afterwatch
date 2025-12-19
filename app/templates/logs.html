@@ -303,6 +303,27 @@ function runsSection() {
     }
 }
 
+function pendingSection() {
+    return {
+        loading: true,
+        pending: [],
+        delayDays: 7,
+        
+        async loadPending() {
+            try {
+                const response = await fetch('/api/pending');
+                const data = await response.json();
+                this.pending = data.pending;
+                this.delayDays = data.delay_days;
+            } catch (e) {
+                console.error('Failed to load pending:', e);
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+
 function orphansSection() {
     return {
         loading: true,
@@ -336,7 +357,6 @@ function orphansSection() {
                 
                 alert(`Deleted ${data.deleted_count} files, reclaimed ${data.deleted_size_formatted}`);
                 
-                // Reload the orphans list
                 await this.loadOrphans();
             } catch (e) {
                 alert('Failed to delete orphans: ' + e.message);
