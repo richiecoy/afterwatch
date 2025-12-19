@@ -183,24 +183,17 @@
                 </label>
             </div>
             <div class="form-group">
-                <label>Schedule Time</label>
-                <div class="time-inputs">
-                    <input 
-                        type="number" 
-                        name="schedule_hour" 
-                        value="{{ settings.schedule_hour }}"
-                        min="0" max="23"
-                        class="time-input"
-                    > : 
-                    <input 
-                        type="number" 
-                        name="schedule_minute" 
-                        value="{{ settings.schedule_minute }}"
-                        min="0" max="59"
-                        class="time-input"
-                    >
-                </div>
-                <p class="help-text">Daily processing time (24-hour format)</p>
+                <label for="delay_days">Delay Days</label>
+                <input 
+                    type="number" 
+                    id="delay_days" 
+                    name="delay_days" 
+                    value="{{ settings.delay_days }}"
+                    min="0" 
+                    max="30"
+                    class="time-input"
+                >
+                <p class="help-text">Days to wait after episode is watched before processing (0 = immediate)</p>
             </div>
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Save Settings</button>
