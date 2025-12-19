@@ -50,7 +50,7 @@
                     {{ format_size(run.bytes_reclaimed) }}
                     {% endif %}
                 </td>
-                <td>{{ 'Dry Run' if run.dry_run else 'Live' }}</td>
+                <td>{{ 'Test' if run.test_mode else 'Live' }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -216,9 +216,9 @@
                     <span class="status-badge error" title="{{ log.error_message }}">✗</span>
                     {% endif %}
                 </td>
-                <td id="mode-{{ log.id }}">{{ 'Dry' if log.dry_run else 'Live' }}</td>
+                <td id="mode-{{ log.id }}">{{ 'Test' if log.test_mode else 'Live' }}</td>
                 <td>
-                    {% if log.dry_run and log.success %}
+                    {% if log.test_mode and log.success %}
                     <button 
                         class="btn btn-small btn-primary"
                         id="btn-{{ log.id }}"
