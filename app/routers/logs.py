@@ -63,7 +63,7 @@ async def logs_page(
     )
     runs = runs_result.scalars().all()
     
-return templates.TemplateResponse(
+    return templates.TemplateResponse(
         "logs.html",
         {
             "request": request,
@@ -77,6 +77,7 @@ return templates.TemplateResponse(
             "version": __version__
         }
     )
+
 
 @router.post("/process-single/{log_id}")
 async def process_single_episode(
