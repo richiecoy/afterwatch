@@ -477,3 +477,76 @@ async def export_failures(session: AsyncSession = Depends(get_session)):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=afterwatch_failures.csv"}
     )
+
+@router.get("/changelog")
+async def get_changelog():
+    """Serve the changelog file."""
+    from fastapi.responses import HTMLResponse
+    from pathlib import Path
+    import markdown
+    
+    changelog_path = Path(__file__).parent.parent.parent / "CHANGELOG.md"
+    
+    if not changelog_path.exists():
+        return HTMLResponse("<h1>Changelog not found</h1>", status_code=404)
+    
+    content = changelog_path.read_text()
+    
+    # Convert markdown to HTML
+    html_content = markdown.markdown(content)
+    
+    # Wrap in styled HTML
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Afterwatch Changelog</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #1a1a2e;
+                color: #e2e8f0;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 2rem;
+                line-height: 1.6;
+            }}
+            h1 {{
+                color: #e63946;
+                border-bottom: 1px solid #374151;
+                padding-bottom: 0.5rem;
+            }}
+            h2 {{
+                color: #e63946;
+                margin-top: 2rem;
+            }}
+            ul {{
+                padding-left: 1.5rem;
+            }}
+            li {{
+                margin-bottom: 0.5rem;
+            }}
+            a {{
+                color: #e63946;
+            }}
+            .back-link {{
+                display: inline-block;
+                margin-bottom: 1rem;
+                padding: 0.5rem 1rem;
+                background: #1f2937;
+                border-radius: 6px;
+                text-decoration: none;
+            }}
+            .back-link:hover {{
+                background: #374151;
+            }}
+        </style>
+    </head>
+    <body>
+        <a href="/" class="back-link">← Back to Dashboard</a>
+        {html_content}
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(html)
