@@ -480,25 +480,16 @@ async def export_failures(session: AsyncSession = Depends(get_session)):
 
 @router.get("/changelog")
 async def get_changelog():
-    """Serve the changelog file."""
+    """Serve the changelog."""
     from fastapi.responses import HTMLResponse
-    from pathlib import Path
-    import re
-    
-    changelog_path = Path(__file__).parent.parent.parent / "CHANGELOG.md"
-    
-    if not changelog_path.exists():
-        return HTMLResponse("<h1>Changelog not found</h1>", status_code=404)
-    
-    content = changelog_path.read_text()
+    from app.version import CHANGELOG
     
     # Simple markdown to HTML conversion
-    lines = content.split('\n')
+    lines = CHANGELOG.strip().split('\n')
     html_lines = []
     in_list = False
     
     for line in lines:
-        # Headers
         if line.startswith('# '):
             if in_list:
                 html_lines.append('</ul>')
@@ -509,26 +500,21 @@ async def get_changelog():
                 html_lines.append('</ul>')
                 in_list = False
             html_lines.append(f'<h2>{line[3:]}</h2>')
-        # List items
         elif line.startswith('- '):
             if not in_list:
                 html_lines.append('<ul>')
                 in_list = True
             html_lines.append(f'<li>{line[2:]}</li>')
-        # Empty lines
         elif line.strip() == '':
             if in_list:
                 html_lines.append('</ul>')
                 in_list = False
-        else:
-            html_lines.append(f'<p>{line}</p>')
     
     if in_list:
         html_lines.append('</ul>')
     
     html_content = '\n'.join(html_lines)
     
-    # Wrap in styled HTML
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -559,9 +545,6 @@ async def get_changelog():
             li {{
                 margin-bottom: 0.5rem;
             }}
-            a {{
-                color: #e63946;
-            }}
             .back-link {{
                 display: inline-block;
                 margin-bottom: 1rem;
@@ -569,6 +552,7 @@ async def get_changelog():
                 background: #1f2937;
                 border-radius: 6px;
                 text-decoration: none;
+                color: #e63946;
             }}
             .back-link:hover {{
                 background: #374151;
