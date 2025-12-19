@@ -64,6 +64,49 @@
     </div>
 </section>
 
+<!-- Pending Deletion -->
+<section class="logs-section" x-data="pendingSection()" x-init="loadPending()">
+    <h2>Pending Deletion</h2>
+    <p class="help-text">Episodes watched and waiting for the <span x-text="delayDays"></span>-day delay period.</p>
+    
+    <template x-if="loading">
+        <p>Loading...</p>
+    </template>
+    
+    <template x-if="!loading && pending.length === 0">
+        <p class="empty-state">No episodes pending.</p>
+    </template>
+    
+    <template x-if="!loading && pending.length > 0">
+        <div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Series</th>
+                        <th>Episode</th>
+                        <th>First Seen</th>
+                        <th>Days Remaining</th>
+                        <th>Process Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="item in pending" :key="item.id">
+                        <tr>
+                            <td x-text="item.series_name"></td>
+                            <td x-text="'S' + String(item.season_number).padStart(2, '0') + 'E' + String(item.episode_number).padStart(2, '0')"></td>
+                            <td x-text="item.first_seen_at"></td>
+                            <td>
+                                <span class="status-badge pending" x-text="item.days_remaining + ' days'"></span>
+                            </td>
+                            <td x-text="item.process_date"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </template>
+</section>
+
 <!-- Orphaned Files -->
 <section class="logs-section" x-data="orphansSection()" x-init="loadOrphans()">
     <h2>Orphaned Files</h2>
