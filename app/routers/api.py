@@ -30,18 +30,27 @@ def format_size(bytes_val: int) -> str:
 @router.get("/stats")
 async def get_stats(session: AsyncSession = Depends(get_session)):
     """Get dashboard statistics."""
+    from sqlalchemy import func
+    
+    # Get last run status
     result = await session.execute(
         select(ProcessRun).order_by(desc(ProcessRun.started_at)).limit(1)
     )
     last_run = result.scalar_one_or_none()
     
+    # Count episodes from actual logs (not runs)
     result = await session.execute(
-        select(ProcessRun).where(ProcessRun.test_mode == False)
+        select(
+            func.count(ProcessLog.id),
+            func.coalesce(func.sum(ProcessLog.original_size_bytes), 0)
+        ).where(
+            ProcessLog.success == True,
+            ProcessLog.test_mode == False
+        )
     )
-    runs = result.scalars().all()
-    
-    total_episodes = sum(r.episodes_processed for r in runs)
-    total_bytes = sum(r.bytes_reclaimed for r in runs)
+    row = result.one()
+    total_episodes = row[0] or 0
+    total_bytes = row[1] or 0
     
     return {
         "episodes_processed": total_episodes,
