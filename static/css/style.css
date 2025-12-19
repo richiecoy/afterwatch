@@ -661,3 +661,60 @@ h2 {
 .sync-form {
     margin-bottom: 1rem;
 }
+
+/* Footer */
+footer {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 1rem 2rem;
+    margin-top: auto;
+}
+
+.footer-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.version-link {
+    color: var(--accent);
+    text-decoration: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.version-link:hover {
+    background: var(--bg-card);
+    text-decoration: none;
+}
+
+/* Ensure footer stays at bottom */
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+```
+
+---
+
+**File 10: `requirements.txt`** — Add markdown package:
+```
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+aiosqlite
+httpx
+jinja2
+python-multipart
+apscheduler
+pydantic-settings
+markdown
