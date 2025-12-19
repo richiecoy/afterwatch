@@ -1,7 +1,7 @@
 __version__ = "0.6.0"
 
 CHANGELOG = """
-# Afterwatch Changelog
+# AfterWatch Changelog
 
 ## v0.6.0 - Dashboard Overhaul
 - Renamed "Dry Run" to "Test Mode" throughout the application
