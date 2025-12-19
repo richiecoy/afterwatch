@@ -3,6 +3,7 @@ from app.models.library_config import EmbyUser, EmbyLibrary, EmbyLibraryFolder, 
 from app.models.process_log import ProcessLog, ProcessRun
 from app.models.schedule import Schedule
 from app.models.settings import AppSettings
+from app.models.watched_episode import WatchedEpisode
 
 __all__ = [
     "Connection",
@@ -13,5 +14,6 @@ __all__ = [
     "ProcessLog",
     "ProcessRun",
     "Schedule",
-    "AppSettings"
+    "AppSettings",
+    "WatchedEpisode"
 ]
