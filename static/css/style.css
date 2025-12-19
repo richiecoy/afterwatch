@@ -544,3 +544,156 @@ h2 {
     background-color: #6b7280;
     cursor: not-allowed;
 }
+
+/* Status grid */
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 900px) {
+    .status-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 500px) {
+    .status-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.status-card {
+    background: var(--bg-card);
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.status-card.warning {
+    border: 2px solid var(--warning);
+}
+
+.status-header {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.status-value {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: var(--accent);
+}
+
+.status-detail {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+}
+
+/* Action buttons */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--bg-card);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 1rem;
+    border-top: 1px solid var(--bg-card);
+}
+
+/* Pending list in modal */
+.select-all {
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--bg-card);
+    margin-bottom: 0.5rem;
+}
+
+.pending-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.pending-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--bg-card);
+}
+
+.pending-item:last-child {
+    border-bottom: none;
+}
+
+.pending-days {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Alpine x-cloak */
+[x-cloak] {
+    display: none !important;
+}
