@@ -10,6 +10,7 @@ from app.models import Connection, EmbyUser, EmbyLibrary, LibraryUserMapping, Em
 from app.services.emby import EmbyClient
 from app.services.sonarr import SonarrClient
 from app.config import settings
+from app.version import __version__
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
@@ -48,10 +49,10 @@ async def config_page(
             "users": users,
             "libraries": libraries,
             "mapping_lookup": mapping_lookup,
-            "settings": settings
+            "settings": settings,
+            "version": __version__
         }
     )
-
 
 @router.post("/emby")
 async def save_emby_connection(
