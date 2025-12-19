@@ -483,7 +483,7 @@ async def get_changelog():
     """Serve the changelog file."""
     from fastapi.responses import HTMLResponse
     from pathlib import Path
-    import markdown
+    import re
     
     changelog_path = Path(__file__).parent.parent.parent / "CHANGELOG.md"
     
@@ -492,8 +492,41 @@ async def get_changelog():
     
     content = changelog_path.read_text()
     
-    # Convert markdown to HTML
-    html_content = markdown.markdown(content)
+    # Simple markdown to HTML conversion
+    lines = content.split('\n')
+    html_lines = []
+    in_list = False
+    
+    for line in lines:
+        # Headers
+        if line.startswith('# '):
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append(f'<h1>{line[2:]}</h1>')
+        elif line.startswith('## '):
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append(f'<h2>{line[3:]}</h2>')
+        # List items
+        elif line.startswith('- '):
+            if not in_list:
+                html_lines.append('<ul>')
+                in_list = True
+            html_lines.append(f'<li>{line[2:]}</li>')
+        # Empty lines
+        elif line.strip() == '':
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+        else:
+            html_lines.append(f'<p>{line}</p>')
+    
+    if in_list:
+        html_lines.append('</ul>')
+    
+    html_content = '\n'.join(html_lines)
     
     # Wrap in styled HTML
     html = f"""
