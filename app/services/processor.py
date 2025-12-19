@@ -1,7 +1,7 @@
 import os
 import asyncio
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 import logging
 
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session
 from app.models import (
     Connection, EmbyLibrary, EmbyLibraryFolder, EmbyUser, LibraryUserMapping, 
-    ProcessLog, ProcessRun
+    ProcessLog, ProcessRun, WatchedEpisode
 )
 from app.services.emby import EmbyClient
 from app.services.sonarr import SonarrClient
@@ -86,7 +86,6 @@ async def get_folder_mappings(
 
 def get_subfolder_id_for_path(file_path: str, folder_mappings: dict[int, str]) -> Optional[int]:
     """Find which subfolder a file belongs to based on its path."""
-    # Sort by path length descending so longer (more specific) paths match first
     sorted_mappings = sorted(folder_mappings.items(), key=lambda x: len(x[1]), reverse=True)
     
     for subfolder_id, folder_path in sorted_mappings:
@@ -116,6 +115,46 @@ def user_can_access_file(
         return False
     
     return True
+
+
+async def check_or_create_watched_record(
+    session: AsyncSession,
+    file_path: str,
+    series_name: str,
+    season_num: int,
+    episode_num: int
+) -> tuple[bool, Optional[WatchedEpisode]]:
+    """
+    Check if episode has a watched record and if delay has passed.
+    Returns (ready_to_process, watched_record)
+    """
+    result = await session.execute(
+        select(WatchedEpisode).where(WatchedEpisode.file_path == file_path)
+    )
+    watched = result.scalar_one_or_none()
+    
+    if not watched:
+        # First time seeing this as watched - create record
+        watched = WatchedEpisode(
+            file_path=file_path,
+            series_name=series_name,
+            season_number=season_num,
+            episode_number=episode_num,
+            first_seen_at=datetime.now()
+        )
+        session.add(watched)
+        return False, watched
+    
+    # Check if delay has passed
+    delay_days = settings.delay_days
+    if delay_days == 0:
+        return True, watched
+    
+    cutoff = datetime.now() - timedelta(days=delay_days)
+    if watched.first_seen_at <= cutoff:
+        return True, watched
+    
+    return False, watched
 
 
 async def process_episode(
@@ -155,11 +194,10 @@ async def process_episode(
     strm_version = str(Path(file_path).with_suffix(".strm"))
     if not os.path.exists(file_path) and os.path.exists(strm_version):
         return None
-
+    
     # Skip if already processed in a previous run
-    from sqlalchemy import select as sql_select
     existing = await session.execute(
-        sql_select(ProcessLog).where(
+        select(ProcessLog).where(
             ProcessLog.original_path == file_path,
             ProcessLog.success == True,
             ProcessLog.dry_run == False
@@ -189,6 +227,17 @@ async def process_episode(
     
     watched_status = await emby.check_episode_watched(episode_id, accessible_users)
     if not all(watched_status.values()):
+        return None
+    
+    # All required users have watched - check delay
+    ready_to_process, watched_record = await check_or_create_watched_record(
+        session, file_path, series_name, season_num, episode_num
+    )
+    
+    if not ready_to_process:
+        # Not ready yet - delay hasn't passed
+        days_remaining = settings.delay_days - (datetime.now() - watched_record.first_seen_at).days
+        logger.info(f"Delaying: {series_name} S{season_num:02d}E{episode_num:02d} ({days_remaining} days remaining)")
         return None
     
     watched_by_names = [user_names.get(uid, uid) for uid in accessible_users if watched_status.get(uid)]
@@ -275,6 +324,11 @@ async def process_episode(
         
         log_entry.success = True
         
+        # Clean up watched record after successful processing
+        await session.execute(
+            delete(WatchedEpisode).where(WatchedEpisode.file_path == file_path)
+        )
+        
     except Exception as e:
         log_entry.success = False
         log_entry.error_message = str(e)
@@ -322,7 +376,6 @@ async def process_watched_episodes(trigger: str = "manual"):
             await session.commit()
             logger.info("Cleared previous dry run logs")
         else:
-            # Live run - clear dry run logs too
             await session.execute(
                 delete(ProcessLog).where(ProcessLog.dry_run == True)
             )
@@ -350,7 +403,7 @@ async def process_watched_episodes(trigger: str = "manual"):
                 for user_id in required_users:
                     user_watched = await emby.get_watched_episodes(user_id, library.id)
                     total_episodes += len(user_watched)
-                    break  # Just count from first user to estimate
+                    break
         
         # Create run record
         run = ProcessRun(
@@ -410,7 +463,6 @@ async def process_watched_episodes(trigger: str = "manual"):
                     )
                     
                     if log:
-                        # Update progress
                         episode_str = f"S{log.season_number:02d}E{log.episode_number:02d}"
                         progress.update(
                             log.series_name, 
@@ -427,7 +479,6 @@ async def process_watched_episodes(trigger: str = "manual"):
                 
                 await session.commit()
             
-            # Update run record with local timezone
             run.completed_at = datetime.now()
             run.episodes_processed = total_processed
             run.episodes_failed = total_failed
