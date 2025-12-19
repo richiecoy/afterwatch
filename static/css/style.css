@@ -24,6 +24,8 @@ body {
     color: var(--text-primary);
     line-height: 1.6;
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 a {
@@ -35,15 +37,8 @@ a:hover {
     text-decoration: underline;
 }
 
-/* Layout */
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 1rem;
-}
-
 /* Navigation */
-nav {
+.main-nav {
     background: var(--bg-secondary);
     padding: 1rem 2rem;
     display: flex;
@@ -56,6 +51,11 @@ nav {
     font-size: 1.5rem;
     font-weight: bold;
     color: var(--accent);
+    text-decoration: none;
+}
+
+.nav-brand:hover {
+    text-decoration: none;
 }
 
 .nav-links {
@@ -65,6 +65,7 @@ nav {
 
 .nav-links a {
     color: var(--text-secondary);
+    text-decoration: none;
     transition: color 0.2s;
 }
 
@@ -75,12 +76,46 @@ nav {
 }
 
 /* Main content */
-main {
+.main-content {
     padding: 2rem;
     max-width: 1400px;
     margin: 0 auto;
+    flex: 1;
+    width: 100%;
 }
 
+/* Footer */
+.main-footer {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 1rem 2rem;
+    margin-top: auto;
+}
+
+.footer-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.version-link {
+    color: var(--accent);
+    text-decoration: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.version-link:hover {
+    background: var(--bg-card);
+    text-decoration: none;
+}
+
+/* Headings */
 h1 {
     margin-bottom: 1.5rem;
     font-size: 2rem;
@@ -170,6 +205,11 @@ h2 {
     border: none;
     transition: all 0.2s;
     text-align: center;
+    text-decoration: none;
+}
+
+.btn:hover {
+    text-decoration: none;
 }
 
 .btn:disabled {
@@ -225,6 +265,11 @@ h2 {
     padding: 1.5rem;
     border-radius: 8px;
     margin-top: 1rem;
+}
+
+.dashboard-actions h2 {
+    color: var(--text-primary);
+    margin-bottom: 1rem;
 }
 
 .action-buttons {
@@ -661,60 +706,3 @@ h2 {
 .sync-form {
     margin-bottom: 1rem;
 }
-
-/* Footer */
-footer {
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
-    padding: 1rem 2rem;
-    margin-top: auto;
-}
-
-.footer-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-}
-
-.version-link {
-    color: var(--accent);
-    text-decoration: none;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    transition: background 0.2s;
-}
-
-.version-link:hover {
-    background: var(--bg-card);
-    text-decoration: none;
-}
-
-/* Ensure footer stays at bottom */
-body {
-    display: flex;
-    flex-direction: column;
-}
-
-main {
-    flex: 1;
-}
-```
-
----
-
-**File 10: `requirements.txt`** — Add markdown package:
-```
-fastapi
-uvicorn[standard]
-sqlalchemy[asyncio]
-aiosqlite
-httpx
-jinja2
-python-multipart
-apscheduler
-pydantic-settings
-markdown
