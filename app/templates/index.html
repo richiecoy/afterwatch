@@ -5,61 +5,109 @@
 {% block content %}
 <h1>Dashboard</h1>
 
-<div x-data="dashboard()" x-init="loadStats()">
+<div x-data="dashboard()" x-init="init()">
+    <!-- Stats Row -->
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-value" x-text="episodes">0</div>
             <div class="stat-label">Episodes Processed</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value" x-text="space">0 GB</div>
+            <div class="stat-value" x-text="space">0 B</div>
             <div class="stat-label">Space Reclaimed</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value" x-text="status">Never</div>
-            <div class="stat-label">Last Run Status</div>
+            <div class="stat-value" x-text="pendingCount">0</div>
+            <div class="stat-label">Pending</div>
         </div>
-        <div class="stat-card" :class="{ 'warning': dryRun }">
-            <div class="stat-value" x-text="dryRun ? 'ON' : 'OFF'">OFF</div>
-            <div class="stat-label">Dry Run Mode</div>
+        <div class="stat-card">
+            <div class="stat-value" x-text="orphanCount">0</div>
+            <div class="stat-label">Orphaned</div>
         </div>
     </div>
-
-    <section class="actions-section">
-        <h2>Actions</h2>
-        <button class="btn btn-primary" @click="runNow()">Run Now</button>
-        <p class="warning-text" x-show="dryRun">
-            ⚠ Dry run mode is enabled. Processing will simulate actions without making changes.
-        </p>
-    </section>
-</div>
-
-<section class="last-run-section" x-data="lastRun()" x-init="loadLastRun()">
-    <h2>Last Run</h2>
-    <template x-if="run">
-        <div class="last-run-details">
-            <div class="detail-row">
-                <span class="detail-label">Time</span>
-                <span class="detail-value" x-text="run.started_at"></span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Status</span>
-                <span class="detail-value" x-text="run.status"></span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Episodes</span>
-                <span class="detail-value" x-text="run.episodes_processed"></span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Mode</span>
-                <span class="detail-value" x-text="run.dry_run ? 'Dry Run' : 'Live'"></span>
+    
+    <!-- Status Row -->
+    <div class="status-grid">
+        <div class="status-card">
+            <div class="status-header">Last Run</div>
+            <div class="status-value" x-text="lastRunStatus">Never</div>
+            <div class="status-detail" x-text="lastRunTime"></div>
+        </div>
+        <div class="status-card">
+            <div class="status-header">Schedule</div>
+            <div class="status-value" x-text="scheduleDesc">Disabled</div>
+            <div class="status-detail" x-text="nextRun ? 'Next: ' + nextRun : ''"></div>
+        </div>
+        <div class="status-card">
+            <div class="status-header">Delay</div>
+            <div class="status-value" x-text="delayDays + ' days'">7 days</div>
+            <div class="status-detail">Before processing</div>
+        </div>
+        <div class="status-card" :class="{ 'warning': testMode }">
+            <div class="status-header">Test Mode</div>
+            <div class="status-value" x-text="testMode ? 'ON' : 'OFF'">OFF</div>
+            <div class="status-detail">
+                <button class="btn btn-small" @click="toggleTestMode()" x-text="testMode ? 'Disable' : 'Enable'"></button>
             </div>
         </div>
-    </template>
-    <template x-if="!run">
-        <p class="empty-state">No runs yet.</p>
-    </template>
-</section>
+    </div>
+    
+    <!-- Actions -->
+    <section class="actions-section">
+        <h2>Actions</h2>
+        <div class="action-buttons">
+            <button class="btn btn-primary" @click="runNow()">Run Now</button>
+            <button class="btn btn-secondary" @click="showPendingModal = true" :disabled="pendingCount === 0">
+                Process Pending (<span x-text="pendingCount">0</span>)
+            </button>
+        </div>
+        <p class="warning-text" x-show="testMode">
+            ⚠ Test mode is enabled. Processing will simulate actions without making changes.
+        </p>
+    </section>
+    
+    <!-- Pending Modal -->
+    <div class="modal-overlay" x-show="showPendingModal" x-cloak @click.self="showPendingModal = false">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Process Pending Episodes</h2>
+                <button class="modal-close" @click="showPendingModal = false">&times;</button>
+            </div>
+            <div class="modal-body">
+                <template x-if="pendingEpisodes.length === 0">
+                    <p>No pending episodes.</p>
+                </template>
+                <template x-if="pendingEpisodes.length > 0">
+                    <div>
+                        <label class="checkbox-label select-all">
+                            <input type="checkbox" @change="toggleSelectAll($event)" :checked="allSelected">
+                            <strong>Select All</strong>
+                        </label>
+                        <div class="pending-list">
+                            <template x-for="ep in pendingEpisodes" :key="ep.id">
+                                <label class="checkbox-label pending-item">
+                                    <input type="checkbox" :value="ep.id" x-model="selectedPending">
+                                    <span x-text="ep.series_name + ' S' + String(ep.season_number).padStart(2, '0') + 'E' + String(ep.episode_number).padStart(2, '0')"></span>
+                                    <span class="pending-days" x-text="ep.days_remaining + ' days left'"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @click="showPendingModal = false">Cancel</button>
+                <button 
+                    class="btn btn-primary" 
+                    @click="processSelected()" 
+                    :disabled="selectedPending.length === 0 || processing"
+                    x-text="processing ? 'Processing...' : 'Process Selected (' + selectedPending.length + ')'"
+                >
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -67,9 +115,31 @@
 function dashboard() {
     return {
         episodes: 0,
-        space: '0 GB',
-        status: 'Never',
-        dryRun: false,
+        space: '0 B',
+        pendingCount: 0,
+        orphanCount: 0,
+        lastRunStatus: 'Never',
+        lastRunTime: '',
+        scheduleDesc: 'Disabled',
+        nextRun: null,
+        delayDays: 7,
+        testMode: false,
+        showPendingModal: false,
+        pendingEpisodes: [],
+        selectedPending: [],
+        processing: false,
+        
+        get allSelected() {
+            return this.pendingEpisodes.length > 0 && 
+                   this.selectedPending.length === this.pendingEpisodes.length;
+        },
+        
+        async init() {
+            await this.loadStats();
+            await this.loadCounts();
+            await this.loadScheduleInfo();
+            await this.loadLastRun();
+        },
         
         async loadStats() {
             try {
@@ -77,10 +147,51 @@ function dashboard() {
                 const data = await response.json();
                 this.episodes = data.episodes_processed || 0;
                 this.space = data.space_reclaimed || '0 B';
-                this.status = data.last_run_status || 'Never';
-                this.dryRun = data.dry_run || false;
+                this.testMode = data.test_mode || false;
             } catch (e) {
                 console.error('Failed to load stats:', e);
+            }
+        },
+        
+        async loadCounts() {
+            try {
+                const response = await fetch('/api/counts');
+                const data = await response.json();
+                this.pendingCount = data.pending_count || 0;
+                this.orphanCount = data.orphan_count || 0;
+            } catch (e) {
+                console.error('Failed to load counts:', e);
+            }
+        },
+        
+        async loadScheduleInfo() {
+            try {
+                const response = await fetch('/api/schedule-info');
+                const data = await response.json();
+                this.scheduleDesc = data.description || 'Disabled';
+                this.nextRun = data.next_run;
+            } catch (e) {
+                console.error('Failed to load schedule info:', e);
+            }
+        },
+        
+        async loadLastRun() {
+            try {
+                const response = await fetch('/api/last-run');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data) {
+                        this.lastRunStatus = data.status;
+                        this.lastRunTime = data.started_at;
+                    }
+                }
+                
+                // Also get delay from pending endpoint
+                const pendingResponse = await fetch('/api/pending');
+                const pendingData = await pendingResponse.json();
+                this.delayDays = pendingData.delay_days || 7;
+            } catch (e) {
+                console.error('Failed to load last run:', e);
             }
         },
         
@@ -91,22 +202,67 @@ function dashboard() {
             } catch (e) {
                 alert('Failed to start processing: ' + e.message);
             }
-        }
-    }
-}
-
-function lastRun() {
-    return {
-        run: null,
+        },
         
-        async loadLastRun() {
+        async toggleTestMode() {
             try {
-                const response = await fetch('/api/last-run');
-                if (response.ok) {
-                    this.run = await response.json();
+                const response = await fetch('/api/toggle-test-mode', { method: 'POST' });
+                const data = await response.json();
+                this.testMode = data.test_mode;
+            } catch (e) {
+                alert('Failed to toggle test mode: ' + e.message);
+            }
+        },
+        
+        async showPendingModal() {
+            this.showPendingModal = true;
+            await this.loadPendingEpisodes();
+        },
+        
+        async loadPendingEpisodes() {
+            try {
+                const response = await fetch('/api/pending');
+                const data = await response.json();
+                this.pendingEpisodes = data.pending;
+                this.selectedPending = [];
+            } catch (e) {
+                console.error('Failed to load pending episodes:', e);
+            }
+        },
+        
+        toggleSelectAll(event) {
+            if (event.target.checked) {
+                this.selectedPending = this.pendingEpisodes.map(ep => ep.id);
+            } else {
+                this.selectedPending = [];
+            }
+        },
+        
+        async processSelected() {
+            if (this.selectedPending.length === 0) return;
+            
+            this.processing = true;
+            
+            try {
+                const response = await fetch('/api/process-pending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: this.selectedPending })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Processed ${data.processed} episodes, reclaimed ${data.size_formatted}`);
+                    this.showPendingModal = false;
+                    await this.loadCounts();
+                    await this.loadStats();
+                } else {
+                    alert('Error: ' + data.error);
                 }
             } catch (e) {
-                console.error('Failed to load last run:', e);
+                alert('Failed to process: ' + e.message);
+            } finally {
+                this.processing = false;
             }
         }
     }
