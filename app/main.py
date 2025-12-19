@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="Afterwatch", version=__version__, lifespan=lifespan)
+app = FastAPI(title="AfterWatch", version=__version__, lifespan=lifespan)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=Path(__file__).parent.parent / "static"), name="static")
