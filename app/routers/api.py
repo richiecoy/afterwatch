@@ -229,3 +229,38 @@ async def delete_orphans(session: AsyncSession = Depends(get_session)):
         "deleted_size_formatted": format_size(deleted_bytes),
         "errors": errors
     }
+
+@router.get("/pending")
+async def get_pending(session: AsyncSession = Depends(get_session)):
+    """Get list of episodes waiting for delay period to pass."""
+    from app.models import WatchedEpisode
+    from app.config import settings
+    from datetime import datetime, timedelta
+    
+    result = await session.execute(
+        select(WatchedEpisode).order_by(WatchedEpisode.first_seen_at)
+    )
+    watched = result.scalars().all()
+    
+    pending = []
+    for w in watched:
+        days_elapsed = (datetime.now() - w.first_seen_at).days
+        days_remaining = max(0, settings.delay_days - days_elapsed)
+        process_date = w.first_seen_at + timedelta(days=settings.delay_days)
+        
+        pending.append({
+            "id": w.id,
+            "series_name": w.series_name,
+            "season_number": w.season_number,
+            "episode_number": w.episode_number,
+            "file_path": w.file_path,
+            "first_seen_at": w.first_seen_at.strftime('%Y-%m-%d %H:%M'),
+            "days_remaining": days_remaining,
+            "process_date": process_date.strftime('%Y-%m-%d')
+        })
+    
+    return {
+        "pending": pending,
+        "total_count": len(pending),
+        "delay_days": settings.delay_days
+    }
