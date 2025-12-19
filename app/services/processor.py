@@ -134,7 +134,6 @@ async def check_or_create_watched_record(
     watched = result.scalar_one_or_none()
     
     if not watched:
-        # First time seeing this as watched - create record
         watched = WatchedEpisode(
             file_path=file_path,
             series_name=series_name,
@@ -145,7 +144,6 @@ async def check_or_create_watched_record(
         session.add(watched)
         return False, watched
     
-    # Check if delay has passed
     delay_days = settings.delay_days
     if delay_days == 0:
         return True, watched
@@ -167,7 +165,7 @@ async def process_episode(
     user_names: dict[str, str],
     library_guid: str,
     folder_mappings: dict[int, str],
-    dry_run: bool,
+    test_mode: bool,
     session: AsyncSession,
     run_id: int
 ) -> Optional[ProcessLog]:
@@ -190,17 +188,15 @@ async def process_episode(
     if file_path.lower().endswith(".strm"):
         return None
     
-    # Skip if original file is gone but STRM exists (already processed)
     strm_version = str(Path(file_path).with_suffix(".strm"))
     if not os.path.exists(file_path) and os.path.exists(strm_version):
         return None
     
-    # Skip if already processed in a previous run
     existing = await session.execute(
         select(ProcessLog).where(
             ProcessLog.original_path == file_path,
             ProcessLog.success == True,
-            ProcessLog.dry_run == False
+            ProcessLog.test_mode == False
         )
     )
     if existing.scalar_one_or_none():
@@ -229,13 +225,11 @@ async def process_episode(
     if not all(watched_status.values()):
         return None
     
-    # All required users have watched - check delay
     ready_to_process, watched_record = await check_or_create_watched_record(
         session, file_path, series_name, season_num, episode_num
     )
     
     if not ready_to_process:
-        # Not ready yet - delay hasn't passed
         days_remaining = settings.delay_days - (datetime.now() - watched_record.first_seen_at).days
         logger.info(f"Delaying: {series_name} S{season_num:02d}E{episode_num:02d} ({days_remaining} days remaining)")
         return None
@@ -260,10 +254,10 @@ async def process_episode(
         strm_path=str(Path(file_path).with_suffix(".strm")),
         folder_name=folder_name,
         watched_by=watched_by,
-        dry_run=dry_run
+        test_mode=test_mode
     )
     
-    if dry_run:
+    if test_mode:
         log_entry.success = True
         session.add(log_entry)
         return log_entry
@@ -324,7 +318,6 @@ async def process_episode(
         
         log_entry.success = True
         
-        # Clean up watched record after successful processing
         await session.execute(
             delete(WatchedEpisode).where(WatchedEpisode.file_path == file_path)
         )
@@ -347,7 +340,7 @@ async def process_watched_episodes(trigger: str = "manual"):
         logger.error("Emby or Sonarr not configured")
         return
     
-    dry_run = settings.dry_run
+    test_mode = settings.test_mode
     
     try:
         user_access = await emby.get_all_user_access_details()
@@ -364,33 +357,30 @@ async def process_watched_episodes(trigger: str = "manual"):
         user_names = {}
     
     async with async_session() as session:
-        # Clear previous dry run logs if this is a dry run
-        # Clear all dry run logs if this is a live run
-        if dry_run:
+        if test_mode:
             await session.execute(
-                delete(ProcessLog).where(ProcessLog.dry_run == True)
+                delete(ProcessLog).where(ProcessLog.test_mode == True)
             )
             await session.execute(
-                delete(ProcessRun).where(ProcessRun.dry_run == True)
+                delete(ProcessRun).where(ProcessRun.test_mode == True)
             )
             await session.commit()
-            logger.info("Cleared previous dry run logs")
+            logger.info("Cleared previous test mode logs")
         else:
             await session.execute(
-                delete(ProcessLog).where(ProcessLog.dry_run == True)
+                delete(ProcessLog).where(ProcessLog.test_mode == True)
             )
             await session.execute(
-                delete(ProcessRun).where(ProcessRun.dry_run == True)
+                delete(ProcessRun).where(ProcessRun.test_mode == True)
             )
             await session.commit()
-            logger.info("Cleared dry run logs before live run")
+            logger.info("Cleared test mode logs before live run")
         
         excluded_user_ids = await get_excluded_user_ids(session)
         if excluded_user_ids:
             excluded_names = [user_names.get(uid, uid) for uid in excluded_user_ids]
             logger.info(f"Excluded users: {', '.join(excluded_names)}")
         
-        # Count total episodes first for progress tracking
         total_episodes = 0
         result = await session.execute(
             select(EmbyLibrary).where(EmbyLibrary.is_enabled == True)
@@ -405,17 +395,15 @@ async def process_watched_episodes(trigger: str = "manual"):
                     total_episodes += len(user_watched)
                     break
         
-        # Create run record
         run = ProcessRun(
             trigger=trigger,
-            dry_run=dry_run,
+            test_mode=test_mode,
             status="running"
         )
         session.add(run)
         await session.commit()
         await session.refresh(run)
         
-        # Start progress tracking
         progress.start(run.id, total_episodes)
         
         try:
@@ -459,7 +447,7 @@ async def process_watched_episodes(trigger: str = "manual"):
                         emby, sonarr, episode, required_users,
                         excluded_user_ids, user_access, user_names, 
                         library.guid, folder_mappings,
-                        dry_run, session, run.id
+                        test_mode, session, run.id
                     )
                     
                     if log:
