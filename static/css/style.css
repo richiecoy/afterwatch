@@ -706,3 +706,73 @@ h2 {
 .sync-form {
     margin-bottom: 1rem;
 }
+
+/* Schedule page */
+.schedule-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.schedule-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    cursor: pointer;
+    padding: 0.75rem;
+    background: var(--bg-card);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+.schedule-option:hover {
+    border-color: var(--accent);
+}
+
+.schedule-option input[type="radio"] {
+    margin-top: 0.25rem;
+}
+
+.schedule-option div {
+    display: flex;
+    flex-direction: column;
+}
+
+.option-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.time-inputs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.interval-input {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.hour-filter-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.days-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.schedule-status {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-card);
+    border-radius: 6px;
+}
