@@ -21,22 +21,18 @@ async def config_page(
     session: AsyncSession = Depends(get_session)
 ):
     """Configuration page."""
-    # Get current connections
     result = await session.execute(select(Connection))
     connections = {c.service: c for c in result.scalars().all()}
     
-    # Get users and libraries
     users_result = await session.execute(select(EmbyUser))
     users = users_result.scalars().all()
     
     libraries_result = await session.execute(select(EmbyLibrary))
     libraries = libraries_result.scalars().all()
     
-    # Get mappings
     mappings_result = await session.execute(select(LibraryUserMapping))
     mappings = mappings_result.scalars().all()
     
-    # Build mapping lookup
     mapping_lookup = {}
     for m in mappings:
         if m.library_id not in mapping_lookup:
@@ -64,7 +60,6 @@ async def save_emby_connection(
     session: AsyncSession = Depends(get_session)
 ):
     """Save and test Emby connection."""
-    # Test connection
     client = EmbyClient(url, api_key)
     try:
         info = await client.test_connection()
@@ -72,7 +67,6 @@ async def save_emby_connection(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Connection failed: {e}")
     
-    # Save or update
     result = await session.execute(
         select(Connection).where(Connection.service == "emby")
     )
@@ -146,7 +140,6 @@ async def sync_emby_data(
     
     client = EmbyClient(conn.url, conn.api_key)
     
-    # Sync users
     users = await client.get_users()
     for user in users:
         existing = await session.get(EmbyUser, user["Id"])
@@ -160,7 +153,6 @@ async def sync_emby_data(
                 is_excluded=False
             ))
     
-    # Sync libraries and their folders
     libraries = await client.get_libraries()
     for lib in libraries:
         lib_id = str(lib.get("ItemId", lib.get("Id", "")))
@@ -182,7 +174,6 @@ async def sync_emby_data(
                 is_enabled=False
             ))
         
-        # Sync folder mappings
         lib_id_int = int(lib_id)
         for i, folder_path in enumerate(locations):
             subfolder_id = lib_id_int + 2 + i
@@ -231,7 +222,6 @@ async def update_library_users(
     data = await request.json()
     user_ids = data.get("user_ids", [])
     
-    # Remove existing mappings
     result = await session.execute(
         select(LibraryUserMapping).where(
             LibraryUserMapping.library_id == library_id
@@ -240,7 +230,6 @@ async def update_library_users(
     for mapping in result.scalars().all():
         await session.delete(mapping)
     
-    # Add new mappings
     for user_id in user_ids:
         session.add(LibraryUserMapping(
             library_id=library_id,
@@ -267,13 +256,13 @@ async def toggle_user_excluded(
 
 @router.post("/settings")
 async def update_settings(
-    dry_run: bool = Form(False),
+    test_mode: bool = Form(False),
     delay_days: int = Form(7),
     session: AsyncSession = Depends(get_session)
 ):
     """Update application settings."""
     from app.config import save_settings
     
-    await save_settings(dry_run, delay_days)
+    await save_settings(test_mode, delay_days)
     
     return RedirectResponse(url="/config", status_code=303)
