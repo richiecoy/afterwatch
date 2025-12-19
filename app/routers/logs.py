@@ -37,14 +37,12 @@ async def logs_page(
     session: AsyncSession = Depends(get_session)
 ):
     """View processing logs."""
-    # Convert success_only string to bool
     success_filter = None
     if success_only == "true":
         success_filter = True
     elif success_only == "false":
         success_filter = False
     
-    # Build query - sort by most recent first
     query = select(ProcessLog).order_by(desc(ProcessLog.timestamp))
     
     if series:
@@ -53,14 +51,12 @@ async def logs_page(
     if success_filter is not None:
         query = query.where(ProcessLog.success == success_filter)
     
-    # Paginate
     offset = (page - 1) * per_page
     query = query.offset(offset).limit(per_page)
     
     result = await session.execute(query)
     logs = result.scalars().all()
     
-    # Get recent runs
     runs_result = await session.execute(
         select(ProcessRun).order_by(desc(ProcessRun.started_at)).limit(10)
     )
@@ -86,19 +82,16 @@ async def process_single_episode(
     log_id: int,
     session: AsyncSession = Depends(get_session)
 ):
-    """Process a single episode from a dry run log entry."""
-    from app.services.processor import get_clients, get_folder_mappings, get_excluded_user_ids
-    from app.services.emby import EmbyClient
-    from app.models import EmbyLibrary, EmbyLibraryFolder
+    """Process a single episode from a test mode log entry."""
+    from app.services.processor import get_clients
     import os
     import asyncio
     
-    # Get the log entry
     log_entry = await session.get(ProcessLog, log_id)
     if not log_entry:
         return JSONResponse({"success": False, "error": "Log entry not found"}, status_code=404)
     
-    if not log_entry.dry_run:
+    if not log_entry.test_mode:
         return JSONResponse({"success": False, "error": "Entry already processed"}, status_code=400)
     
     emby, sonarr = await get_clients()
@@ -108,7 +101,6 @@ async def process_single_episode(
     file_path = log_entry.original_path
     
     try:
-        # Step 1: Find the episode in Sonarr
         sonarr_file = await sonarr.get_episode_file_by_path(file_path)
         if not sonarr_file:
             raise Exception(f"Could not find file in Sonarr: {file_path}")
@@ -119,7 +111,6 @@ async def process_single_episode(
         
         series_id = series["id"]
         
-        # Get the episode ID from Sonarr
         episodes = await sonarr.get_episodes_by_series(series_id)
         sonarr_episode = None
         for ep in episodes:
@@ -133,40 +124,32 @@ async def process_single_episode(
         
         sonarr_episode_id = sonarr_episode["id"]
         
-        # Step 2: Unmonitor the episode FIRST
         await sonarr.set_episode_monitored(sonarr_episode_id, False)
         log_entry.sonarr_unmonitored = True
         
-        # Step 3: Check if this was the last monitored episode in the season
         if await sonarr.check_season_complete(series_id, log_entry.season_number):
             await sonarr.set_season_monitored(series_id, log_entry.season_number, False)
             log_entry.season_unmonitored = True
         
-        # Step 4: Delete the original file
         if os.path.exists(file_path):
             os.remove(file_path)
             log_entry.file_deleted = True
         
-        # Step 5: Create STRM placeholder
         from pathlib import Path as PathLib
         strm_path = PathLib(file_path).with_suffix(".strm")
         strm_path.touch()
         log_entry.strm_created = True
         
-        # Step 6: Refresh Sonarr series
         await sonarr.refresh_series(series_id)
         
-        # Wait for Sonarr to process
         await asyncio.sleep(2)
         
-        # Step 7: Trigger rename in Sonarr
         new_file = await sonarr.get_episode_file_by_path(str(strm_path))
         if new_file:
             await sonarr.rename_files(series_id, [new_file["id"]])
             log_entry.sonarr_renamed = True
         
-        # Mark as no longer a dry run
-        log_entry.dry_run = False
+        log_entry.test_mode = False
         log_entry.success = True
         log_entry.error_message = None
         
@@ -182,42 +165,3 @@ async def process_single_episode(
         log_entry.error_message = str(e)
         await session.commit()
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-
-@router.get("/run/{run_id}", response_class=HTMLResponse)
-async def run_details(
-    request: Request,
-    run_id: int,
-    session: AsyncSession = Depends(get_session)
-):
-    """View details of a specific processing run."""
-    run = await session.get(ProcessRun, run_id)
-    
-    if not run:
-        return templates.TemplateResponse(
-            "error.html",
-            {"request": request, "message": "Run not found"},
-            status_code=404
-        )
-    
-    result = await session.execute(
-        select(ProcessLog).where(
-            ProcessLog.timestamp >= run.started_at,
-            ProcessLog.timestamp <= (run.completed_at or run.started_at)
-        ).order_by(
-            ProcessLog.series_name,
-            ProcessLog.season_number,
-            ProcessLog.episode_number
-        )
-    )
-    logs = result.scalars().all()
-    
-    return templates.TemplateResponse(
-        "run_details.html",
-        {
-            "request": request,
-            "run": run,
-            "logs": logs,
-            "format_size": format_size
-        }
-    )
