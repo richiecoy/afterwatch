@@ -8,6 +8,7 @@ from typing import Optional
 
 from app.database import get_session
 from app.models import ProcessLog, ProcessRun
+from app.version import __version__
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
@@ -62,7 +63,7 @@ async def logs_page(
     )
     runs = runs_result.scalars().all()
     
-    return templates.TemplateResponse(
+return templates.TemplateResponse(
         "logs.html",
         {
             "request": request,
@@ -72,10 +73,10 @@ async def logs_page(
             "per_page": per_page,
             "series_filter": series,
             "success_filter": success_filter,
-            "format_size": format_size
+            "format_size": format_size,
+            "version": __version__
         }
     )
-
 
 @router.post("/process-single/{log_id}")
 async def process_single_episode(
