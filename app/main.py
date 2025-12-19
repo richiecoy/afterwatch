@@ -45,6 +45,6 @@ async def home(request: Request):
         "index.html",
         {
             "request": request,
-            "dry_run": settings.dry_run
+            "test_mode": settings.test_mode
         }
     )
