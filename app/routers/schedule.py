@@ -8,6 +8,7 @@ from typing import Optional
 
 from app.database import get_session
 from app.models import Schedule
+from app.version import __version__
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
@@ -42,16 +43,14 @@ async def schedule_page(
     from app.scheduler import get_next_run_time
     next_run = get_next_run_time()
     
-    return templates.TemplateResponse(
+return templates.TemplateResponse(
         "schedule.html",
         {
             "request": request,
             "schedule": schedule,
-            "days_list": days_list,
-            "next_run": next_run
+            "version": __version__
         }
     )
-
 
 @router.post("/save")
 async def save_schedule(
