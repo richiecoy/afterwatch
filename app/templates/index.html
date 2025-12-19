@@ -3,9 +3,9 @@
 {% block title %}Dashboard - Afterwatch{% endblock %}
 
 {% block content %}
-<h1>Dashboard</h1>
-
 <div x-data="dashboard()" x-init="init()">
+    <h1>Dashboard</h1>
+
     <!-- Stats Row -->
     <div class="stats-grid">
         <div class="stat-card">
@@ -27,37 +27,35 @@
     </div>
     
     <!-- Status Row -->
-    <div class="status-grid">
-        <div class="status-card">
-            <div class="status-header">Last Run</div>
-            <div class="status-value" x-text="lastRunStatus">Never</div>
-            <div class="status-detail" x-text="lastRunTime"></div>
+    <div class="stats-grid status-row">
+        <div class="stat-card">
+            <div class="stat-label">Last Run</div>
+            <div class="stat-value small" x-text="lastRunStatus">Never</div>
+            <div class="stat-detail" x-text="lastRunTime"></div>
         </div>
-        <div class="status-card">
-            <div class="status-header">Schedule</div>
-            <div class="status-value" x-text="scheduleDesc">Disabled</div>
-            <div class="status-detail" x-text="nextRun ? 'Next: ' + nextRun : ''"></div>
+        <div class="stat-card">
+            <div class="stat-label">Schedule</div>
+            <div class="stat-value small" x-text="scheduleDesc">Disabled</div>
+            <div class="stat-detail" x-text="nextRun ? 'Next: ' + nextRun : ''"></div>
         </div>
-        <div class="status-card">
-            <div class="status-header">Delay</div>
-            <div class="status-value" x-text="delayDays + ' days'">7 days</div>
-            <div class="status-detail">Before processing</div>
+        <div class="stat-card">
+            <div class="stat-label">Delay</div>
+            <div class="stat-value small" x-text="delayDays + ' days'">7 days</div>
+            <div class="stat-detail">Before processing</div>
         </div>
-        <div class="status-card" :class="{ 'warning': testMode }">
-            <div class="status-header">Test Mode</div>
-            <div class="status-value" x-text="testMode ? 'ON' : 'OFF'">OFF</div>
-            <div class="status-detail">
-                <button class="btn btn-small" @click="toggleTestMode()" x-text="testMode ? 'Disable' : 'Enable'"></button>
-            </div>
+        <div class="stat-card" :class="{ 'card-warning': testMode }">
+            <div class="stat-label">Test Mode</div>
+            <div class="stat-value small" :class="{ 'text-warning': testMode }" x-text="testMode ? 'ON' : 'OFF'">OFF</div>
+            <button class="btn btn-small btn-toggle" @click="toggleTestMode()" x-text="testMode ? 'Disable' : 'Enable'"></button>
         </div>
     </div>
     
     <!-- Actions -->
-    <section class="actions-section">
+    <section class="dashboard-actions">
         <h2>Actions</h2>
         <div class="action-buttons">
             <button class="btn btn-primary" @click="runNow()">Run Now</button>
-            <button class="btn btn-secondary" @click="showPendingModal = true" :disabled="pendingCount === 0">
+            <button class="btn btn-secondary" @click="openPendingModal()" :disabled="pendingCount === 0">
                 Process Pending (<span x-text="pendingCount">0</span>)
             </button>
         </div>
@@ -178,7 +176,7 @@ function dashboard() {
         async loadLastRun() {
             try {
                 const response = await fetch('/api/last-run');
-                if (response.ok) {
+                if (response.ok && response.status !== 204) {
                     const data = await response.json();
                     if (data) {
                         this.lastRunStatus = data.status;
@@ -186,7 +184,6 @@ function dashboard() {
                     }
                 }
                 
-                // Also get delay from pending endpoint
                 const pendingResponse = await fetch('/api/pending');
                 const pendingData = await pendingResponse.json();
                 this.delayDays = pendingData.delay_days || 7;
@@ -214,9 +211,9 @@ function dashboard() {
             }
         },
         
-        async showPendingModal() {
-            this.showPendingModal = true;
+        async openPendingModal() {
             await this.loadPendingEpisodes();
+            this.showPendingModal = true;
         },
         
         async loadPendingEpisodes() {
