@@ -38,9 +38,11 @@ class SonarrClient:
             response.raise_for_status()
             return response.json()
     
-    async def get_series_by_path(self, path: str) -> Optional[dict]:
+async def get_series_by_path(self, path: str) -> Optional[dict]:
         """Find a series by its path."""
         series_list = await self.get_series()
+        # Sort by path length descending so more specific paths match first
+        series_list.sort(key=lambda s: len(s.get("path", "")), reverse=True)
         for series in series_list:
             if path.startswith(series.get("path", "")):
                 return series
