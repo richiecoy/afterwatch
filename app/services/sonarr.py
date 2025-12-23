@@ -38,7 +38,7 @@ class SonarrClient:
             response.raise_for_status()
             return response.json()
     
-async def get_series_by_path(self, path: str) -> Optional[dict]:
+    async def get_series_by_path(self, path: str) -> Optional[dict]:
         """Find a series by its path."""
         series_list = await self.get_series()
         # Sort by path length descending so more specific paths match first
@@ -61,25 +61,23 @@ async def get_series_by_path(self, path: str) -> Optional[dict]:
     
     async def get_episode_file_by_path(self, path: str) -> Optional[dict]:
         """Find an episode file by its path."""
+        series = await self.get_series_by_path(path)
+        if not series:
+            return None
+        
         async with httpx.AsyncClient() as client:
-            # Get series first
-            series = await self.get_series_by_path(path)
-            if not series:
-                return None
-            
-            # Get episode files for this series
             response = await client.get(
                 f"{self.base_url}/api/v3/episodefile",
-                headers=self.headers,
                 params={"seriesId": series["id"]},
+                headers=self.headers,
                 timeout=30.0
             )
             response.raise_for_status()
             files = response.json()
-            
-            for f in files:
-                if f.get("path") == path:
-                    return f
+        
+        for f in files:
+            if f.get("path") == path:
+                return f
         return None
     
     async def get_episodes_by_series(self, series_id: int) -> list[dict]:
@@ -87,15 +85,79 @@ async def get_series_by_path(self, path: str) -> Optional[dict]:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.base_url}/api/v3/episode",
-                headers=self.headers,
                 params={"seriesId": series_id},
+                headers=self.headers,
                 timeout=30.0
             )
             response.raise_for_status()
             return response.json()
     
-    async def refresh_series(self, series_id: int):
-        """Trigger a refresh for a series."""
+    async def set_episode_monitored(self, episode_id: int, monitored: bool) -> dict:
+        """Set episode monitored status."""
+        async with httpx.AsyncClient() as client:
+            # First get the episode
+            response = await client.get(
+                f"{self.base_url}/api/v3/episode/{episode_id}",
+                headers=self.headers,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            episode = response.json()
+            
+            # Update monitored status
+            episode["monitored"] = monitored
+            
+            response = await client.put(
+                f"{self.base_url}/api/v3/episode/{episode_id}",
+                headers=self.headers,
+                json=episode,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            return response.json()
+    
+    async def check_season_complete(self, series_id: int, season_number: int) -> bool:
+        """Check if all episodes in a season are unmonitored."""
+        episodes = await self.get_episodes_by_series(series_id)
+        season_episodes = [
+            ep for ep in episodes 
+            if ep.get("seasonNumber") == season_number
+        ]
+        
+        if not season_episodes:
+            return False
+        
+        return all(not ep.get("monitored", True) for ep in season_episodes)
+    
+    async def set_season_monitored(self, series_id: int, season_number: int, monitored: bool) -> dict:
+        """Set season monitored status."""
+        async with httpx.AsyncClient() as client:
+            # Get the series
+            response = await client.get(
+                f"{self.base_url}/api/v3/series/{series_id}",
+                headers=self.headers,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            series = response.json()
+            
+            # Update the season
+            for season in series.get("seasons", []):
+                if season.get("seasonNumber") == season_number:
+                    season["monitored"] = monitored
+                    break
+            
+            response = await client.put(
+                f"{self.base_url}/api/v3/series/{series_id}",
+                headers=self.headers,
+                json=series,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            return response.json()
+    
+    async def refresh_series(self, series_id: int) -> dict:
+        """Trigger a series refresh in Sonarr."""
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/api/v3/command",
@@ -109,8 +171,8 @@ async def get_series_by_path(self, path: str) -> Optional[dict]:
             response.raise_for_status()
             return response.json()
     
-    async def rename_files(self, series_id: int, file_ids: list[int]):
-        """Trigger a rename for specific files."""
+    async def rename_files(self, series_id: int, file_ids: list[int]) -> dict:
+        """Trigger file rename in Sonarr."""
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/api/v3/command",
@@ -124,78 +186,3 @@ async def get_series_by_path(self, path: str) -> Optional[dict]:
             )
             response.raise_for_status()
             return response.json()
-    
-    async def set_episode_monitored(self, episode_id: int, monitored: bool):
-        """Set the monitored status of an episode."""
-        async with httpx.AsyncClient() as client:
-            # Get current episode data
-            response = await client.get(
-                f"{self.base_url}/api/v3/episode/{episode_id}",
-                headers=self.headers,
-                timeout=10.0
-            )
-            response.raise_for_status()
-            episode = response.json()
-            
-            # Update monitored status
-            episode["monitored"] = monitored
-            response = await client.put(
-                f"{self.base_url}/api/v3/episode/{episode_id}",
-                headers=self.headers,
-                json=episode,
-                timeout=10.0
-            )
-            response.raise_for_status()
-            return response.json()
-    
-    async def set_season_monitored(self, series_id: int, season_number: int, monitored: bool):
-        """Set the monitored status of a season."""
-        async with httpx.AsyncClient() as client:
-            # Get series data
-            response = await client.get(
-                f"{self.base_url}/api/v3/series/{series_id}",
-                headers=self.headers,
-                timeout=10.0
-            )
-            response.raise_for_status()
-            series = response.json()
-            
-            # Update the specific season
-            for season in series.get("seasons", []):
-                if season["seasonNumber"] == season_number:
-                    season["monitored"] = monitored
-                    break
-            
-            # Save series
-            response = await client.put(
-                f"{self.base_url}/api/v3/series/{series_id}",
-                headers=self.headers,
-                json=series,
-                timeout=10.0
-            )
-            response.raise_for_status()
-            return response.json()
-    
-    async def check_season_complete(
-        self, 
-        series_id: int, 
-        season_number: int,
-        exclude_episode_id: Optional[int] = None
-    ) -> bool:
-        """
-        Check if all episodes in a season are unmonitored 
-        (or will be after excluding one episode).
-        """
-        episodes = await self.get_episodes_by_series(series_id)
-        season_episodes = [
-            ep for ep in episodes 
-            if ep.get("seasonNumber") == season_number
-        ]
-        
-        for ep in season_episodes:
-            if exclude_episode_id and ep["id"] == exclude_episode_id:
-                continue
-            if ep.get("monitored", True):
-                return False
-        
-        return True
