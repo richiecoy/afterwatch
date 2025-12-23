@@ -1,7 +1,10 @@
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 CHANGELOG = """
 # AfterWatch Changelog
+
+## v0.6.1 - Bug Fix
+- Fixed series path matching for similarly named series (e.g., "Below Deck" vs "Below Deck Mediterranean")
 
 ## v0.6.0 - Dashboard Overhaul
 - Renamed "Dry Run" to "Test Mode" throughout the application
@@ -12,6 +15,7 @@ CHANGELOG = """
 - Fixed stats counting to include all processed episodes
 - Added pending and orphan counts to dashboard
 - Added version footer with changelog link
+- Added favicon and logo
 
 ## v0.5.0 - Delay Feature
 - Added configurable delay days before processing
