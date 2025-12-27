@@ -1,7 +1,11 @@
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 CHANGELOG = """
 # AfterWatch Changelog
+
+## v0.6.2 - Pending Cleanup
+- Episodes marked as unwatched in Emby are now automatically removed from the pending queue
+- Cleanup runs at the start of each scan before processing
 
 ## v0.6.1 - Bug Fix
 - Fixed series path matching for similarly named series (e.g., "Below Deck" vs "Below Deck Mediterranean")
