@@ -117,6 +117,88 @@ def user_can_access_file(
     return True
 
 
+async def cleanup_stale_watched_records(
+    session: AsyncSession,
+    emby: EmbyClient,
+    libraries: list,
+    user_access_map: dict,
+    user_names: dict[str, str]
+) -> int:
+    """Remove WatchedEpisode records for episodes no longer watched by all required users."""
+    
+    removed_count = 0
+    
+    for library in libraries:
+        required_users = await get_library_required_users(session, library.id)
+        if not required_users:
+            continue
+        
+        folder_mappings = await get_folder_mappings(session, library.id)
+        folder_paths = list(folder_mappings.values())
+        
+        if not folder_paths:
+            continue
+        
+        # Build set of file paths watched by each required user
+        user_watched_paths = {}
+        for user_id in required_users:
+            user_watched = await emby.get_watched_episodes(user_id, library.id)
+            paths = set()
+            for ep in user_watched:
+                media_sources = ep.get("MediaSources", [])
+                if media_sources:
+                    file_path = media_sources[0].get("Path", "")
+                    if file_path:
+                        paths.add(file_path)
+            user_watched_paths[user_id] = paths
+        
+        # Get WatchedEpisode records that belong to this library
+        result = await session.execute(select(WatchedEpisode))
+        all_pending = result.scalars().all()
+        
+        for watched in all_pending:
+            # Check if belongs to this library
+            belongs = any(watched.file_path.startswith(fp) for fp in folder_paths)
+            if not belongs:
+                continue
+            
+            # Check which users can access this file
+            accessible_users = [
+                user_id for user_id in required_users
+                if user_can_access_file(
+                    watched.file_path, 
+                    user_access_map.get(user_id, {}), 
+                    library.guid, 
+                    folder_mappings
+                )
+            ]
+            
+            if not accessible_users:
+                # No required users can access, remove record
+                await session.delete(watched)
+                removed_count += 1
+                logger.info(f"Removed stale record (no accessible users): {watched.series_name} S{watched.season_number:02d}E{watched.episode_number:02d}")
+                continue
+            
+            # Check if all accessible required users have still watched
+            all_watched = True
+            for user_id in accessible_users:
+                if watched.file_path not in user_watched_paths.get(user_id, set()):
+                    all_watched = False
+                    break
+            
+            if not all_watched:
+                await session.delete(watched)
+                removed_count += 1
+                user_name_list = [user_names.get(uid, uid) for uid in accessible_users]
+                logger.info(f"Removed from pending (no longer watched): {watched.series_name} S{watched.season_number:02d}E{watched.episode_number:02d}")
+    
+    if removed_count > 0:
+        await session.commit()
+    
+    return removed_count
+
+
 async def check_or_create_watched_record(
     session: AsyncSession,
     file_path: str,
@@ -381,12 +463,20 @@ async def process_watched_episodes(trigger: str = "manual"):
             excluded_names = [user_names.get(uid, uid) for uid in excluded_user_ids]
             logger.info(f"Excluded users: {', '.join(excluded_names)}")
         
-        total_episodes = 0
+        # Get enabled libraries for cleanup
         result = await session.execute(
             select(EmbyLibrary).where(EmbyLibrary.is_enabled == True)
         )
         libraries = result.scalars().all()
         
+        # Cleanup stale watched records (episodes marked as unwatched)
+        removed = await cleanup_stale_watched_records(
+            session, emby, libraries, user_access, user_names
+        )
+        if removed > 0:
+            logger.info(f"Removed {removed} stale pending records")
+        
+        total_episodes = 0
         for library in libraries:
             required_users = await get_library_required_users(session, library.id)
             if required_users:
