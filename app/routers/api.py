@@ -38,7 +38,7 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
     )
     last_run = result.scalar_one_or_none()
     
-    # Count episodes from actual logs (not runs)
+    # Count episodes from actual logs
     result = await session.execute(
         select(
             func.count(ProcessLog.id),
@@ -52,13 +52,19 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
     total_episodes = row[0] or 0
     total_bytes = row[1] or 0
     
+    # Pending count
+    pending_result = await session.execute(
+        select(func.count(WatchedEpisode.id))
+    )
+    pending_count = pending_result.scalar() or 0
+    
     return {
         "episodes_processed": total_episodes,
         "space_reclaimed": format_size(total_bytes),
         "last_run_status": last_run.status if last_run else "never",
-        "test_mode": settings.test_mode
+        "test_mode": settings.test_mode,
+        "pending_count": pending_count
     }
-
 
 @router.get("/counts")
 async def get_counts(session: AsyncSession = Depends(get_session)):
